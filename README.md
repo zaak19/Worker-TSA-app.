@@ -128,3 +128,8 @@ Aucun paiement réel n'est traité pour le moment. Les écrans de paiement (abon
 
 *Innover aujourd'hui, construire demain.*
 **Trillion Software**
+
+
+## Modification v3
+
+Après une connexion réussie avec l'e-mail et le mot de passe Firebase, l'application ouvre maintenant `screen-profile-type`, qui correspond à la suite du parcours déjà présente dans `index.html`. Le placeholder `screen-home` n'est plus affiché immédiatement après la connexion.

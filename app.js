@@ -365,7 +365,11 @@ WorkerTSA.handleLogin = async function () {
   try {
     const cred = await WorkerTSA.signIn(email, password);
     WorkerTSA.state.currentUserId = cred.user.uid;
-    WorkerTSA.goTo('screen-home');
+
+    // Après une connexion Firebase réussie, on reprend le parcours
+    // de l'application avec l'écran de choix du profil déjà présent
+    // dans le projet, au lieu d'afficher le placeholder d'accueil.
+    WorkerTSA.goTo('screen-profile-type');
   } catch (err) {
     showError(errorEl, translateFirebaseError(err));
   }
