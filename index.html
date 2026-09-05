@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Worker TSA — par Trillion Software</title>
-<link rel="stylesheet" href="styles.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=6" />
 <link rel="icon" href="icon.png" />
 </head>
 <body>
@@ -143,7 +143,7 @@
     <div class="icon-box">💼</div>
     <div class="content">
       <h3>Organisateur ou prestataire de services</h3>
-      <p>Organisez des activités, proposez vos services et trouvez de nouvelles opportunités professionnelles.</p>
+      <p>Publiez vos événements ou services, suivez vos ventes et gérez vos revenus.</p>
     </div>
     <div class="radio-circle"></div>
   </div>
@@ -366,7 +366,7 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 8/11 : Abonnement
+     ÉTAPE 8/11 : Type d'activité et tarification
      ============================================================ -->
 <section id="screen-org-8" class="screen">
   <div class="brand-header">
@@ -377,28 +377,49 @@
   <div class="step-label">Étape 8 sur 11</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
-  <h1 class="screen-title">Choisissez votre abonnement</h1>
-  <p class="screen-desc">Une seule formule peut être sélectionnée.</p>
+  <h1 class="screen-title">Que proposez-vous ?</h1>
+  <p class="screen-desc">Votre tarification dépend du type d'activité que vous enregistrez sur Worker TSA.</p>
 
-  <div class="plan-card" onclick="WorkerTSA.selectPlan('mensuelle', 2000, this)">
-    <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule mensuelle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée chaque mois</p></div>
-    <div class="plan-price">2 000 FCFA<small>/mois</small></div>
+  <div class="radio-card" id="billing-event-card" onclick="WorkerTSA.selectActivityForBilling('evenement')">
+    <div class="icon-box">🎟</div>
+    <div class="content">
+      <h3>Un événement</h3>
+      <p>Festival, concert, conférence, rencontre, match ou tout autre événement.</p>
+      <strong style="color:var(--bordeaux);">5 000 FCFA par événement</strong>
+    </div>
+    <div class="radio-circle"></div>
   </div>
 
-  <div class="plan-card" onclick="WorkerTSA.selectPlan('trimestrielle', 5000, this)">
-    <div class="plan-badge">Le plus choisi</div>
-    <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule trimestrielle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée tous les 3 mois</p></div>
-    <div class="plan-price">5 000 FCFA<small>/3 mois</small></div>
+  <div class="radio-card" id="billing-service-card" onclick="WorkerTSA.selectActivityForBilling('service')">
+    <div class="icon-box">💼</div>
+    <div class="content">
+      <h3>Un service</h3>
+      <p>Vous proposez durablement vos services et souhaitez rester visible sur Worker TSA.</p>
+      <strong style="color:var(--bordeaux);">Abonnement mensuel, trimestriel ou annuel</strong>
+    </div>
+    <div class="radio-circle"></div>
   </div>
 
-  <div class="plan-card" onclick="WorkerTSA.selectPlan('annuelle', 18000, this)">
-    <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule annuelle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée une fois par an</p></div>
-    <div class="plan-price">18 000 FCFA<small>/an</small></div>
+  <div id="service-plan-options" style="display:none;margin-top:18px;">
+    <p class="field-label">Choisissez votre abonnement prestataire</p>
+    <div class="plan-card" data-plan="mensuelle" onclick="WorkerTSA.selectPlan('mensuelle', 2000, this)">
+      <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule mensuelle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée chaque mois</p></div>
+      <div class="plan-price">2 000 FCFA<small>/mois</small></div>
+    </div>
+    <div class="plan-card" data-plan="trimestrielle" onclick="WorkerTSA.selectPlan('trimestrielle', 5000, this)">
+      <div class="plan-badge">Le plus choisi</div>
+      <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule trimestrielle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée tous les 3 mois</p></div>
+      <div class="plan-price">5 000 FCFA<small>/3 mois</small></div>
+    </div>
+    <div class="plan-card" data-plan="annuelle" onclick="WorkerTSA.selectPlan('annuelle', 18000, this)">
+      <div><h3 style="margin:0 0 4px;font-size:1.05rem;">Formule annuelle</h3><p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Facturée une fois par an</p></div>
+      <div class="plan-price">18 000 FCFA<small>/an</small></div>
+    </div>
   </div>
 
   <div class="btn-row">
     <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-7')">Retour</button>
-    <button class="btn btn-primary" id="btn-plan-continue" disabled onclick="WorkerTSA.goTo('screen-org-9')">Continuer</button>
+    <button class="btn btn-primary" id="btn-billing-type-continue" disabled onclick="WorkerTSA.continueBillingChoice()">Continuer</button>
   </div>
 </section>
 
@@ -414,11 +435,11 @@
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Paiement</h1>
-  <p class="screen-desc">Finalisez votre abonnement pour activer votre demande d'inscription.</p>
+  <p class="screen-desc" id="billing-payment-description">Finalisez votre inscription.</p>
 
   <div class="info-card" style="background:var(--bordeaux-light);border:none;display:flex;justify-content:space-between;align-items:center;padding:16px 18px;">
-    <strong id="org-plan-name-display">Formule mensuelle</strong>
-    <strong style="color:var(--bordeaux);" id="org-plan-price-display">2 000 FCFA</strong>
+    <strong id="org-plan-name-display">Sélectionnez votre formule</strong>
+    <strong style="color:var(--bordeaux);" id="org-plan-price-display">—</strong>
   </div>
 
   <p class="field-label" style="margin-top:20px;">Choisissez votre moyen de paiement</p>
@@ -439,10 +460,10 @@
   <div class="pay-method disabled"><div class="pay-icon" style="background:#eee;">📱</div><div><div class="pay-name">Orange Money</div></div><span class="unavailable-tag">Indisponible</span></div>
   <div class="pay-method disabled"><div class="pay-icon" style="background:#eee;">📱</div><div><div class="pay-name">MTN</div></div><span class="unavailable-tag">Indisponible</span></div>
 
-  <p class="helper-text">Aucun paiement n'est traité pour le moment : l'encaissement réel sera activé une fois les moyens de paiement disponibles connectés à un prestataire (Mobile Money).</p>
+  <p class="helper-text">Aucun paiement réel n'est traité pour le moment : l'encaissement sera activé une fois les moyens de paiement connectés à un prestataire Mobile Money.</p>
 
   <button class="btn btn-primary" id="btn-pay-now" disabled onclick="WorkerTSA.processPayment()">Payer maintenant</button>
-  <p class="helper-text center-text">Le paiement réel sera activé une fois les moyens de paiement intégrés.</p>
+  <p class="helper-text center-text" id="billing-payment-note">Le paiement réel sera activé une fois les moyens de paiement intégrés.</p>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-8')">Retour</button>
 </section>
 
@@ -460,18 +481,18 @@
 
   <div class="status-icon-circle success">✓</div>
   <h1 class="screen-title center-text">Paiement réussi</h1>
-  <p class="screen-desc center-text">Votre abonnement a été activé avec succès. Bienvenue sur Worker TSA.</p>
+  <p class="screen-desc center-text" id="billing-confirm-description">Votre paiement a été confirmé. Bienvenue sur Worker TSA.</p>
 
   <div class="info-card">
-    <div class="info-row"><span class="label">Formule</span><span class="value" id="confirm-plan-name">Mensuelle</span></div>
-    <div class="info-row"><span class="label">Montant</span><span class="value" id="confirm-plan-price" style="color:var(--bordeaux);">2 000 FCFA</span></div>
+    <div class="info-row"><span class="label" id="confirm-plan-label">Formule</span><span class="value" id="confirm-plan-name">—</span></div>
+    <div class="info-row"><span class="label">Montant</span><span class="value" id="confirm-plan-price" style="color:var(--bordeaux);">—</span></div>
     <div class="info-row"><span class="label">Moyen de paiement</span><span class="value" id="confirm-pay-method">T-Money</span></div>
     <div class="info-row"><span class="label">Statut</span><span class="value" style="color:var(--success);">Confirmé</span></div>
   </div>
 
   <p class="helper-text center-text">Un e-mail de confirmation vous a été envoyé. Votre profil sera examiné avant validation finale.</p>
 
-  <button class="btn btn-primary" onclick="WorkerTSA.goTo('screen-org-11')">Continuer</button>
+  <button class="btn btn-primary" onclick="WorkerTSA.setActivityType(WorkerTSA.state.activityType || 'evenement'); WorkerTSA.goTo('screen-org-11')">Continuer</button>
 </section>
 
 <!-- ============================================================
@@ -488,11 +509,9 @@
 
   <h1 class="screen-title">Votre profil principal</h1>
   <p class="screen-desc">Complétez votre profil pour être visible par vos clients.</p>
-
-  <label class="field-label">Type d'activité</label>
-  <div class="type-toggle">
-    <div class="type-option active" id="type-evenement" onclick="WorkerTSA.setActivityType('evenement')">🎟 Événement</div>
-    <div class="type-option" id="type-service" onclick="WorkerTSA.setActivityType('service')">💼 Service</div>
+  <div class="info-card" style="background:var(--bordeaux-light);border:none;">
+    <div class="info-row"><span class="label">Type d'activité</span><strong class="value" id="main-activity-type-display">—</strong></div>
+    <div class="info-row"><span class="label">Tarification</span><strong class="value" id="main-activity-fee-display">—</strong></div>
   </div>
 
   <div class="upload-circle" id="org-main-photo-zone" onclick="document.getElementById('org-main-photo-input').click()">
@@ -619,6 +638,47 @@
 </section>
 
 <!-- ============================================================
+     ESPACE VENDEUR — ventes, verrouillage et retraits
+     ============================================================ -->
+<section id="screen-organizer-dashboard" class="screen screen-dashboard">
+  <div class="brand-header">
+    <div class="logo-box"><div class="logo-slot"></div></div>
+    <div class="brand-name">Worker TSA</div>
+    <div class="brand-sub">Espace vendeur</div>
+  </div>
+  <div class="dashboard-head">
+    <div><span class="home-kicker">ESPACE PROFESSIONNEL</span><h1 class="screen-title">Mes ventes</h1><p class="screen-desc">Suivez vos tickets vendus, vos commissions et les fonds disponibles après la clôture des ventes.</p></div>
+    <button class="refresh-btn" onclick="WorkerTSA.loadOrganizerDashboard()" aria-label="Actualiser">↻</button>
+  </div>
+  <div class="dashboard-stats">
+    <div class="stat-card"><span>Tickets vendus</span><strong id="dashboard-total-tickets">0</strong></div>
+    <div class="stat-card"><span>Ventes brutes</span><strong id="dashboard-gross-sales">0 FCFA</strong></div>
+    <div class="stat-card"><span>Commission 5 %</span><strong id="dashboard-commission">0 FCFA</strong></div>
+    <div class="stat-card stat-card-highlight"><span>Fonds disponibles</span><strong id="dashboard-available-funds">0 FCFA</strong></div>
+  </div>
+  <div id="dashboard-event-list" class="dashboard-event-list"><div class="empty-state">Chargement de vos événements…</div></div>
+  <div id="withdrawal-panel" class="withdrawal-panel hidden">
+    <div class="panel-title-row"><div><h2>Retirer mes fonds</h2><p>Le retrait est disponible après le verrouillage des ventes de l'événement.</p></div></div>
+    <label class="field-label">Événement</label>
+    <select id="withdraw-event"></select>
+    <label class="field-label">Montant à retirer (FCFA)</label>
+    <input type="number" id="withdraw-amount" min="1" step="1" placeholder="Montant disponible" />
+    <p class="withdraw-available" id="withdraw-available-text">Disponible : 0 FCFA</p>
+    <label class="field-label">Moyen de retrait</label>
+    <div class="withdraw-methods">
+      <button type="button" class="withdraw-method" data-method="T-Money" onclick="WorkerTSA.selectWithdrawalMethod('T-Money', this)">📱 T-Money</button>
+      <button type="button" class="withdraw-method" data-method="Moov Money" onclick="WorkerTSA.selectWithdrawalMethod('Moov Money', this)">📱 Moov Money</button>
+    </div>
+    <label class="field-label">Numéro de réception</label>
+    <input type="tel" id="withdraw-phone" placeholder="+228 XX XX XX XX" />
+    <p class="error-text" id="withdraw-error"></p>
+    <button class="btn btn-primary" id="btn-withdraw" disabled onclick="WorkerTSA.requestWithdrawal()">Demander le retrait</button>
+  </div>
+  <div class="dashboard-note"><strong>À retenir</strong><p>La commission Worker TSA est de 5 % sur chaque ticket vendu. Les ventes sont verrouillées automatiquement dès que l'heure exacte de l'événement est atteinte.</p></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
+</section>
+
+<!-- ============================================================
      PARCOURS PARTICIPANT — Choix du type
      ============================================================ -->
 <section id="screen-part-type" class="screen">
@@ -668,15 +728,32 @@
 </section>
 
 <!-- ============================================================
-     ACCUEIL (placeholder — à construire ensuite)
+     ACCUEIL — tableau de bord d'entrée
      ============================================================ -->
-<section id="screen-home" class="screen">
-  <div class="brand-header">
+<section id="screen-home" class="screen screen-home">
+  <div class="brand-header home-brand">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
+    <div class="brand-sub">par Trillion Software</div>
   </div>
-  <h1 class="screen-title center-text">Bienvenue sur Worker TSA</h1>
-  <p class="screen-desc center-text">Cet écran d'accueil sera construit à la prochaine étape.</p>
+  <div class="home-hero">
+    <span class="home-kicker">VOTRE PLATEFORME</span>
+    <h1 class="screen-title">Bienvenue sur Worker TSA</h1>
+    <p class="screen-desc">Découvrez des événements et des services, ou gérez votre activité professionnelle depuis votre espace.</p>
+  </div>
+  <div class="home-actions">
+    <button class="home-action-card" onclick="WorkerTSA.goTo('screen-part-type')">
+      <span class="home-action-icon">🎟</span>
+      <span><strong>Découvrir</strong><small>Événements et services</small></span>
+      <span class="home-arrow">›</span>
+    </button>
+    <button class="home-action-card" onclick="WorkerTSA.openOrganizerDashboard()">
+      <span class="home-action-icon">📊</span>
+      <span><strong>Espace vendeur</strong><small>Ventes, fonds et retraits</small></span>
+      <span class="home-arrow">›</span>
+    </button>
+  </div>
+  <p class="home-footer">BY TRILLION SOFTWARE</p>
 </section>
 
 <!-- ============================================================
@@ -685,9 +762,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=1"></script>
-<script src="auth.js?v=1"></script>
-<script src="provider.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="firebase-config.js?v=6"></script>
+<script src="auth.js?v=6"></script>
+<script src="provider.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

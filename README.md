@@ -116,13 +116,14 @@ Le numéro unique à 6 caractères est déjà généré par `WorkerTSA.generateT
 ## 💰 Modèle économique
 
 - **Prestataires de services** : abonnement (2 000 FCFA/mois, 5 000 FCFA/trimestre, ou 18 000 FCFA/an). Les clients accèdent gratuitement à leurs coordonnées.
-- **Organisateurs d'événements** : mêmes abonnements + **commission de 5%** prélevée sur chaque ticket vendu dans l'application (voir `WorkerTSA.TICKET_COMMISSION_RATE` dans `provider.js`).
+- **Organisateurs d'événements** : **5 000 FCFA par événement enregistré**, en paiement unique. Il n'y a pas d'abonnement organisateur pour l'enregistrement de l'événement.
+- **Commission sur les tickets** : **5% du prix de chaque ticket vendu** pour les événements (voir `WorkerTSA.TICKET_COMMISSION_RATE` dans `provider.js`).
 
 ---
 
 ## 📱 Paiement (statut actuel)
 
-Aucun paiement réel n'est traité pour le moment. Les écrans de paiement (abonnement et achat de ticket) sont fonctionnels visuellement mais simulent la validation. Moyens de paiement prévus : **T-Money (Mixx by YAS)** et **Moov Money (Flooz)** — Wave, Orange Money et MTN sont affichés comme indisponibles en attendant leur intégration.
+Aucun paiement réel n'est traité pour le moment. Les écrans de paiement (frais d'enregistrement d'événement ou abonnement prestataire) sont fonctionnels visuellement mais simulent la validation. Moyens de paiement prévus : **T-Money (Mixx by YAS)** et **Moov Money (Flooz)** — Wave, Orange Money et MTN sont affichés comme indisponibles en attendant leur intégration.
 
 ---
 
@@ -133,3 +134,15 @@ Aucun paiement réel n'est traité pour le moment. Les écrans de paiement (abon
 ## Modification v3
 
 Après une connexion réussie avec l'e-mail et le mot de passe Firebase, l'application ouvre maintenant `screen-profile-type`, qui correspond à la suite du parcours déjà présente dans `index.html`. Le placeholder `screen-home` n'est plus affiché immédiatement après la connexion.
+
+
+## Version 6 — Espace vendeur
+
+- Tableau de bord organisateur avec nombre de tickets vendus, ventes brutes, commission Worker TSA de 5 % et fonds disponibles.
+- Verrouillage automatique des ventes à l'heure exacte de début de l'événement.
+- Demande de retrait des fonds après verrouillage, via T-Money ou Moov Money.
+- Les demandes de retrait sont enregistrées dans Firestore (`withdrawals`) avec le statut `pending`. Le versement réel reste à connecter au prestataire Mobile Money.
+- Les ventes futures peuvent être enregistrées dans `ticketSales`; `recordTicketSale()` refuse une vente après l'heure de l'événement et met à jour les compteurs de l'événement.
+- Accueil visuellement plus doux, typographie légèrement agrandie et mention discrète « BY TRILLION SOFTWARE ».
+
+> Remarque : le verrouillage côté interface et `recordTicketSale()` sont des protections côté client. Les règles Firestore doivent aussi interdire les écritures de ventes après l'heure de l'événement et sécuriser les retraits en production.

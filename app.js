@@ -24,9 +24,12 @@ WorkerTSA.state = {
     whatsapp: null,
     plan: null,
     planPrice: null,
+    billingType: null,
+    eventRegistrationFee: null,
     payMethod: null
   },
-  currentUserId: null
+  currentUserId: null,
+  organizerDashboard: { events: [], selectedEventId: null, withdrawalMethod: null }
 };
 
 /* ---------------------------------------------------------
@@ -417,9 +420,23 @@ WorkerTSA.selectProfileType = function (type) {
   document.getElementById('btn-profile-continue').disabled = false;
 };
 
-WorkerTSA.confirmProfileType = function () {
+WorkerTSA.confirmProfileType = async function () {
   if (WorkerTSA.state.profileType === 'organisateur') {
-    WorkerTSA.goTo('screen-org-1');
+    // L'utilisateur est déjà authentifié par Firebase. On ouvre directement
+    // le parcours professionnel sans recréer un second compte avec le même e-mail.
+    if (WorkerTSA.state.currentUserId) {
+      const current = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : null;
+      WorkerTSA.state.org.email = (current && current.email) || WorkerTSA.state.org.email || '';
+      try {
+        const providerSnap = await db.collection('providers').doc(WorkerTSA.state.currentUserId).get();
+        const providerData = providerSnap.exists ? providerSnap.data() : {};
+        await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { profileType: 'organisateur' });
+        if (providerData.onboardingComplete) { WorkerTSA.openOrganizerDashboard(); return; }
+      } catch (e) { console.warn('Impossible de vérifier le profil professionnel.', e); }
+      WorkerTSA.goTo('screen-org-1');
+    } else {
+      WorkerTSA.goTo('screen-org-1');
+    }
   } else if (WorkerTSA.state.profileType === 'participant') {
     WorkerTSA.goTo('screen-part-type');
   }
@@ -429,11 +446,26 @@ WorkerTSA.confirmProfileType = function () {
    PARCOURS ORGANISATEUR
    --------------------------------------------------------- */
 WorkerTSA.orgStep1Next = async function () {
-  const email = document.getElementById('org-email').value.trim();
-  const password = document.getElementById('org-password').value;
+  const emailInput = document.getElementById('org-email');
+  const passwordInput = document.getElementById('org-password');
+  const email = emailInput ? emailInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value : '';
   const errorEl = document.getElementById('org-1-error');
   errorEl.classList.remove('visible');
 
+  // Cas normal : le compte Firebase a déjà été créé/authentifié avant
+  // d'entrer dans l'espace organisateur. Ne pas créer un deuxième compte.
+  if (WorkerTSA.state.currentUserId) {
+    const current = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : null;
+    WorkerTSA.state.org.email = (current && current.email) || email || '';
+    if (email && !WorkerTSA.isValidEmail(email)) {
+      return showError(errorEl, 'Adresse e-mail invalide.');
+    }
+    WorkerTSA.goTo('screen-org-2');
+    return;
+  }
+
+  // Fallback pour une entrée directe dans le parcours professionnel.
   if (!WorkerTSA.isValidEmail(email)) {
     return showError(errorEl, 'Adresse e-mail invalide.');
   }
@@ -473,6 +505,7 @@ WorkerTSA.orgStep6Next = function () {
 
 function renderOrgSummary() {
   const o = WorkerTSA.state.org;
+  const billingLabel = WorkerTSA.state.activityType === 'evenement' ? 'Événement — 5 000 FCFA par événement' : 'Service — abonnement prestataire';
   const rows = [
     ['Adresse e-mail', o.email, false],
     ['Photo de profil', o.profilePhoto ? 'Ajoutée' : 'Non renseignée', !o.profilePhoto],
@@ -481,7 +514,8 @@ function renderOrgSummary() {
     ['Numéro WhatsApp', o.whatsapp || 'Non renseigné', !o.whatsapp],
     ['Ville', o.city || 'Non renseigné', !o.city],
     ['Pays', o.country || 'Non renseigné', !o.country],
-    ['Localisation', (o.address || o.mapsLink) ? 'Renseignée' : 'Non renseigné', !(o.address || o.mapsLink)]
+    ['Localisation', (o.address || o.mapsLink) ? 'Renseignée' : 'Non renseigné', !(o.address || o.mapsLink)],
+    ['Modèle de paiement', billingLabel, false]
   ];
   const card = document.getElementById('org-summary-card');
   card.innerHTML = rows.map(function (r) {
@@ -517,20 +551,84 @@ WorkerTSA.markUploaded = function (inputEl, labelId, message) {
 };
 
 /* ---------------------------------------------------------
-   ABONNEMENT
+   TARIFICATION ORGANISATEUR / PRESTATAIRE
+   - Événement : 5 000 FCFA par événement, paiement unique
+   - Service : abonnement 2 000/mois, 5 000/trimestre, 18 000/an
    --------------------------------------------------------- */
+WorkerTSA.EVENT_REGISTRATION_FEE = 5000;
+
+WorkerTSA.selectActivityForBilling = function (type) {
+  WorkerTSA.state.activityType = type;
+  WorkerTSA.state.org.billingType = type === 'evenement' ? 'event_registration' : 'service_subscription';
+
+  document.getElementById('billing-event-card').classList.toggle('selected', type === 'evenement');
+  document.getElementById('billing-service-card').classList.toggle('selected', type === 'service');
+
+  const planOptions = document.getElementById('service-plan-options');
+  if (planOptions) planOptions.style.display = type === 'service' ? 'block' : 'none';
+
+  if (type === 'evenement') {
+    WorkerTSA.state.org.plan = 'evenement';
+    WorkerTSA.state.org.planPrice = WorkerTSA.EVENT_REGISTRATION_FEE;
+    WorkerTSA.state.org.eventRegistrationFee = WorkerTSA.EVENT_REGISTRATION_FEE;
+  } else {
+    WorkerTSA.state.org.plan = null;
+    WorkerTSA.state.org.planPrice = null;
+    WorkerTSA.state.org.eventRegistrationFee = null;
+  }
+
+  document.getElementById('btn-billing-type-continue').disabled = false;
+};
+
+WorkerTSA.continueBillingChoice = function () {
+  if (!WorkerTSA.state.activityType) return;
+
+  if (WorkerTSA.state.activityType === 'service' && (!WorkerTSA.state.org.plan || !WorkerTSA.state.org.planPrice)) {
+    alert('Veuillez choisir une formule d’abonnement prestataire.');
+    return;
+  }
+
+  if (WorkerTSA.state.activityType === 'evenement') {
+    document.getElementById('org-plan-name-display').textContent = 'Enregistrement d’un événement';
+    document.getElementById('org-plan-price-display').textContent = '5 000 FCFA';
+  } else {
+    const names = { mensuelle: 'Formule mensuelle', trimestrielle: 'Formule trimestrielle', annuelle: 'Formule annuelle' };
+    document.getElementById('org-plan-name-display').textContent = names[WorkerTSA.state.org.plan] || 'Abonnement';
+    document.getElementById('org-plan-price-display').textContent = WorkerTSA.state.org.planPrice.toLocaleString('fr-FR') + ' FCFA';
+  }
+
+  const desc = document.getElementById('billing-payment-description');
+  const note = document.getElementById('billing-payment-note');
+  if (WorkerTSA.state.activityType === 'evenement') {
+    desc.textContent = 'Payez les frais fixes de 5 000 FCFA pour enregistrer cet événement sur Worker TSA.';
+    note.textContent = 'Ce paiement est unique pour l’enregistrement de cet événement. La commission de 5 % sur chaque ticket vendu reste applicable.';
+  } else {
+    desc.textContent = 'Finalisez votre abonnement prestataire pour rester visible sur Worker TSA.';
+    note.textContent = 'L’abonnement concerne les prestataires de services. Il ne s’applique pas aux organisateurs d’événements.';
+  }
+
+  document.querySelectorAll('#screen-org-9 .pay-method').forEach(function (r) {
+    r.style.borderColor = 'var(--border-soft)';
+  });
+  WorkerTSA.state.org.payMethod = null;
+  document.getElementById('btn-pay-now').disabled = true;
+
+  WorkerTSA.goTo('screen-org-9');
+};
+
 WorkerTSA.selectPlan = function (planId, price, cardEl) {
-  document.querySelectorAll('#screen-org-8 .plan-card').forEach(function (c) {
+  if (WorkerTSA.state.activityType !== 'service') return;
+  document.querySelectorAll('#service-plan-options .plan-card').forEach(function (c) {
     c.classList.remove('selected');
   });
   cardEl.classList.add('selected');
   WorkerTSA.state.org.plan = planId;
   WorkerTSA.state.org.planPrice = price;
-  document.getElementById('btn-plan-continue').disabled = false;
+};
 
-  const names = { mensuelle: 'Formule mensuelle', trimestrielle: 'Formule trimestrielle', annuelle: 'Formule annuelle' };
-  document.getElementById('org-plan-name-display').textContent = names[planId];
-  document.getElementById('org-plan-price-display').textContent = price.toLocaleString('fr-FR') + ' FCFA';
+WorkerTSA.prepareServicePlan = function (planId, price) {
+  WorkerTSA.state.org.plan = planId;
+  WorkerTSA.state.org.planPrice = price;
 };
 
 /* ---------------------------------------------------------
@@ -546,16 +644,31 @@ WorkerTSA.selectPayMethod = function (method, rowEl) {
 };
 
 WorkerTSA.processPayment = async function () {
-  // ⚠️ Aucun encaissement réel n'est effectué ici (voir note à l'écran).
-  // Cette fonction simule la validation et enregistre l'abonnement.
+  // Aucun encaissement réel n'est effectué ici. La validation reste simulée
+  // jusqu'à l'intégration d'un prestataire Mobile Money.
   const o = WorkerTSA.state.org;
+  const isEvent = WorkerTSA.state.activityType === 'evenement';
   const names = { mensuelle: 'Formule mensuelle', trimestrielle: 'Formule trimestrielle', annuelle: 'Formule annuelle' };
-  document.getElementById('confirm-plan-name').textContent = names[o.plan] || '—';
-  document.getElementById('confirm-plan-price').textContent = (o.planPrice || 0).toLocaleString('fr-FR') + ' FCFA';
+
+  if (!o.payMethod) return;
+  if (!isEvent && (!o.plan || !o.planPrice)) {
+    alert('Veuillez choisir une formule d’abonnement.');
+    return;
+  }
+
+  const amount = isEvent ? WorkerTSA.EVENT_REGISTRATION_FEE : o.planPrice;
+  const label = isEvent ? 'Enregistrement d’un événement' : (names[o.plan] || 'Abonnement');
+
+  document.getElementById('confirm-plan-label').textContent = isEvent ? 'Type de paiement' : 'Formule';
+  document.getElementById('confirm-plan-name').textContent = label;
+  document.getElementById('confirm-plan-price').textContent = amount.toLocaleString('fr-FR') + ' FCFA';
   document.getElementById('confirm-pay-method').textContent = o.payMethod || '—';
+  document.getElementById('billing-confirm-description').textContent = isEvent
+    ? 'Le paiement de 5 000 FCFA pour l’enregistrement de votre événement a été confirmé. La commission de 5 % sera prélevée sur chaque ticket vendu.'
+    : 'Votre abonnement prestataire a été activé avec succès. Bienvenue sur Worker TSA.';
 
   if (WorkerTSA.state.currentUserId) {
-    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, {
+    const billingData = {
       email: o.email,
       country: o.country,
       city: o.city,
@@ -563,12 +676,26 @@ WorkerTSA.processPayment = async function () {
       mapsLink: o.mapsLink,
       phone: o.phone,
       whatsapp: o.whatsapp,
-      plan: o.plan,
-      planPrice: o.planPrice,
+      activityType: WorkerTSA.state.activityType,
       payMethod: o.payMethod,
-      subscriptionStatus: 'active',
       profileStatus: 'pending_review'
-    });
+    };
+
+    if (isEvent) {
+      billingData.billingType = 'event_registration';
+      billingData.eventRegistrationFee = WorkerTSA.EVENT_REGISTRATION_FEE;
+      billingData.eventPaymentStatus = 'paid_simulated';
+      billingData.subscriptionStatus = 'not_applicable';
+      billingData.plan = null;
+      billingData.planPrice = null;
+    } else {
+      billingData.billingType = 'service_subscription';
+      billingData.plan = o.plan;
+      billingData.planPrice = o.planPrice;
+      billingData.subscriptionStatus = 'active_simulated';
+    }
+
+    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, billingData);
   }
 
   WorkerTSA.goTo('screen-org-10');
@@ -579,10 +706,15 @@ WorkerTSA.processPayment = async function () {
    --------------------------------------------------------- */
 WorkerTSA.setActivityType = function (type) {
   WorkerTSA.state.activityType = type;
-  document.getElementById('type-evenement').classList.toggle('active', type === 'evenement');
-  document.getElementById('type-service').classList.toggle('active', type === 'service');
-  document.getElementById('main-photos-label').textContent = type === 'evenement' ? 'Photos de l\'événement' : 'Photos de l\'organisation ou du service';
-  document.getElementById('main-name-label').textContent = type === 'evenement' ? 'Nom de l\'événement' : 'Nom de l\'organisation ou du service';
+  WorkerTSA.state.org.billingType = type === 'evenement' ? 'event_registration' : 'service_subscription';
+  const typeDisplay = document.getElementById('main-activity-type-display');
+  const feeDisplay = document.getElementById('main-activity-fee-display');
+  if (typeDisplay) typeDisplay.textContent = type === 'evenement' ? 'Événement' : 'Service';
+  if (feeDisplay) feeDisplay.textContent = type === 'evenement' ? '5 000 FCFA par événement' : 'Abonnement prestataire';
+  const photos = document.getElementById('main-photos-label');
+  const name = document.getElementById('main-name-label');
+  if (photos) photos.textContent = type === 'evenement' ? "Photos de l'événement" : "Photos de l'organisation ou du service";
+  if (name) name.textContent = type === 'evenement' ? "Nom de l'événement" : "Nom de l'organisation ou du service";
   renderCategoryOptions(type);
 };
 
@@ -638,6 +770,7 @@ WorkerTSA.validateMainProfile = async function () {
     document.getElementById('ticket-event-name').value = name;
     WorkerTSA.goTo('screen-org-ticket');
   } else {
+    if (WorkerTSA.state.currentUserId) await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { profileType: 'organisateur', onboardingComplete: true });
     WorkerTSA.goTo('screen-org-pending');
   }
 };
@@ -660,25 +793,109 @@ WorkerTSA.publishEvent = async function () {
     return showError(errorEl, 'Veuillez remplir tous les champs obligatoires.');
   }
 
+  if (WorkerTSA.state.activityType !== 'evenement') {
+    return showError(errorEl, 'La publication d’un événement est réservée au profil Événement.');
+  }
+
+  if (WorkerTSA.state.org.eventRegistrationFee !== WorkerTSA.EVENT_REGISTRATION_FEE) {
+    return showError(errorEl, 'Les frais fixes de 5 000 FCFA pour l’enregistrement de l’événement doivent être validés avant sa publication.');
+  }
+
   const commission = WorkerTSA.computeCommission(price);
 
   const ticketData = {
     eventName: eventName,
+    category: (WorkerTSA.state.mainProfile && WorkerTSA.state.mainProfile.category) || '',
     price: Number(price),
     date: date,
     time: time,
     lieu: lieu,
     mapsLink: mapsLink,
+    registrationFee: WorkerTSA.EVENT_REGISTRATION_FEE,
+    registrationFeeStatus: 'paid_simulated',
     commissionRate: WorkerTSA.TICKET_COMMISSION_RATE,
     commissionAmount: commission.commission,
     netAmount: commission.net
   };
 
+  let savedEventId = null;
   if (WorkerTSA.state.currentUserId) {
-    await WorkerTSA.saveEventTicket(WorkerTSA.state.currentUserId, ticketData);
+    const result = await WorkerTSA.saveEventTicket(WorkerTSA.state.currentUserId, { ...ticketData, ticketsSold: 0, grossSales: 0, totalCommission: 0 });
+    if (!result.success) return showError(errorEl, 'Impossible d’enregistrer l’événement pour le moment.');
+    savedEventId = result.eventId;
+    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { profileType: 'organisateur', onboardingComplete: true, publishedEventId: savedEventId });
   }
-
+  WorkerTSA.state.org.publishedEventId = savedEventId;
   WorkerTSA.goTo('screen-org-pending');
+};
+
+/* ---------------------------------------------------------
+   ESPACE VENDEUR — tickets, verrouillage et retraits
+   --------------------------------------------------------- */
+WorkerTSA.openOrganizerDashboard = async function () {
+  if (!WorkerTSA.state.currentUserId) { WorkerTSA.goTo('screen-auth'); return; }
+  WorkerTSA.goTo('screen-organizer-dashboard');
+  await WorkerTSA.loadOrganizerDashboard();
+};
+function formatFCFA(value) { return Number(value || 0).toLocaleString('fr-FR') + ' FCFA'; }
+function formatEventDate(date, time) {
+  if (!date) return 'Date non renseignée';
+  const d = new Date((date || '') + 'T' + (time || '00:00'));
+  if (Number.isNaN(d.getTime())) return date + (time ? ' à ' + time : '');
+  return d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', year:'numeric'}) + (time ? ' à ' + time : '');
+}
+WorkerTSA.loadOrganizerDashboard = async function () {
+  const list = document.getElementById('dashboard-event-list');
+  if (!list || !WorkerTSA.state.currentUserId) return;
+  list.innerHTML = '<div class="empty-state">Actualisation des ventes…</div>';
+  try {
+    const events = await WorkerTSA.getOrganizerEvents(WorkerTSA.state.currentUserId);
+    const summaries = [];
+    for (const event of events) summaries.push({ event, summary: await WorkerTSA.getEventSalesSummary(event.id, event) });
+    WorkerTSA.state.organizerDashboard.events = summaries;
+    const totals = summaries.reduce((a,x)=>({sold:a.sold+x.summary.sold,gross:a.gross+x.summary.gross,commission:a.commission+x.summary.commission,net:a.net+x.summary.net}),{sold:0,gross:0,commission:0,net:0});
+    document.getElementById('dashboard-total-tickets').textContent = totals.sold.toLocaleString('fr-FR');
+    document.getElementById('dashboard-gross-sales').textContent = formatFCFA(totals.gross);
+    document.getElementById('dashboard-commission').textContent = formatFCFA(totals.commission);
+    document.getElementById('dashboard-available-funds').textContent = formatFCFA(summaries.filter(x=>x.summary.locked).reduce((n,x)=>n+x.summary.available,0));
+    if (!summaries.length) { list.innerHTML='<div class="empty-state">Aucun événement enregistré pour le moment.</div>'; document.getElementById('withdrawal-panel').classList.add('hidden'); return; }
+    list.innerHTML = summaries.map(function(x){
+      const e=x.event, s=x.summary;
+      return '<article class="seller-event-card"><div class="seller-event-top"><div><span class="seller-event-category">'+(e.category||'Événement')+'</span><h2>'+(e.eventName||'Événement')+'</h2><p>'+formatEventDate(e.date,e.time)+' · '+(e.lieu||'')+'</p></div><span class="sales-status '+(s.locked?'locked':'open')+'">'+(s.locked?'Ventes verrouillées':'Ventes ouvertes')+'</span></div><div class="seller-event-metrics"><div><span>Tickets</span><strong>'+s.sold.toLocaleString('fr-FR')+'</strong></div><div><span>Brut</span><strong>'+formatFCFA(s.gross)+'</strong></div><div><span>Commission</span><strong>'+formatFCFA(s.commission)+'</strong></div><div><span>Net</span><strong>'+formatFCFA(s.net)+'</strong></div></div>'+(s.locked?'<button class="btn btn-primary seller-withdraw-btn" onclick="WorkerTSA.prepareWithdrawal(\''+e.id+'\')">Retirer les fonds</button>':'<p class="seller-lock-note">La vente reste ouverte jusqu’à l’heure exacte de l’événement.</p>')+'</article>';
+    }).join('');
+    WorkerTSA.refreshWithdrawalOptions();
+  } catch(error) { console.error(error); list.innerHTML='<div class="empty-state error-state">Impossible de charger vos ventes. Vérifiez votre connexion puis actualisez.</div>'; }
+};
+WorkerTSA.refreshWithdrawalOptions = function(){
+  const select=document.getElementById('withdraw-event'); if(!select) return;
+  const locked=WorkerTSA.state.organizerDashboard.events.filter(x=>x.summary.locked && x.summary.available>0);
+  select.innerHTML=locked.length?locked.map(x=>'<option value="'+x.event.id+'">'+(x.event.eventName||'Événement')+' — '+formatFCFA(x.summary.available)+'</option>').join(''):'<option value="">Aucun fonds disponible</option>';
+  WorkerTSA.updateWithdrawalAvailability();
+};
+WorkerTSA.prepareWithdrawal=function(eventId){
+  const panel=document.getElementById('withdrawal-panel'),select=document.getElementById('withdraw-event'); if(!panel||!select)return;
+  panel.classList.remove('hidden'); select.value=eventId; WorkerTSA.state.organizerDashboard.selectedEventId=eventId; WorkerTSA.updateWithdrawalAvailability(); panel.scrollIntoView({behavior:'smooth',block:'start'});
+};
+WorkerTSA.updateWithdrawalAvailability=function(){
+  const select=document.getElementById('withdraw-event'), input=document.getElementById('withdraw-amount'), text=document.getElementById('withdraw-available-text'); if(!select)return;
+  const item=WorkerTSA.state.organizerDashboard.events.find(x=>x.event.id===select.value), available=item?item.summary.available:0;
+  if(text)text.textContent='Disponible : '+formatFCFA(available);
+  if(input){input.max=available; if(!input.value||Number(input.value)>available)input.value=available||'';}
+  const button=document.getElementById('btn-withdraw'); if(button)button.disabled=!(item&&item.summary.locked&&available>0&&WorkerTSA.state.organizerDashboard.withdrawalMethod);
+};
+WorkerTSA.selectWithdrawalMethod=function(method,el){ WorkerTSA.state.organizerDashboard.withdrawalMethod=method; document.querySelectorAll('.withdraw-method').forEach(b=>b.classList.toggle('selected',b===el)); WorkerTSA.updateWithdrawalAvailability(); };
+WorkerTSA.requestWithdrawal=async function(){
+  const errorEl=document.getElementById('withdraw-error'); errorEl.classList.remove('visible');
+  const select=document.getElementById('withdraw-event'), amount=Number(document.getElementById('withdraw-amount').value), phone=document.getElementById('withdraw-phone').value.trim();
+  const item=WorkerTSA.state.organizerDashboard.events.find(x=>x.event.id===select.value);
+  if(!item||!item.summary.locked)return showError(errorEl,'Le retrait est disponible uniquement après le verrouillage des ventes.');
+  if(!WorkerTSA.state.organizerDashboard.withdrawalMethod)return showError(errorEl,'Choisissez un moyen de retrait.');
+  if(!amount||amount<=0||amount>item.summary.net)return showError(errorEl,'Le montant demandé dépasse les fonds disponibles.');
+  if(!phone)return showError(errorEl,'Renseignez le numéro qui recevra le retrait.');
+  const result=await WorkerTSA.saveWithdrawalRequest(WorkerTSA.state.currentUserId,{eventId:item.event.id,eventName:item.event.eventName||'Événement',amount,paymentMethod:WorkerTSA.state.organizerDashboard.withdrawalMethod,payoutPhone:phone,availableAtRequest:item.summary.net});
+  if(!result.success)return showError(errorEl,'Impossible d’enregistrer la demande de retrait.');
+  alert('Votre demande de retrait a été enregistrée. Le versement réel sera effectué lorsque le système de paiement Worker TSA sera connecté.');
+  document.getElementById('withdraw-amount').value='';
 };
 
 /* ---------------------------------------------------------
@@ -714,6 +931,8 @@ WorkerTSA.selectParticipantType = function (type) {
 document.addEventListener('DOMContentLoaded', function () {
   injectLogos();
   renderCategoryOptions('evenement'); // catégories par défaut pour l'écran org-11
+  const withdrawEvent = document.getElementById('withdraw-event');
+  if (withdrawEvent) withdrawEvent.addEventListener('change', WorkerTSA.updateWithdrawalAvailability);
 
   // Écran de démarrage : image 9:16 affichée pendant 1 seconde,
   // puis création du PIN lors de la première utilisation ou
