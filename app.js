@@ -57,6 +57,252 @@ function injectLogos() {
 }
 
 /* ---------------------------------------------------------
+   CODE DE SÉCURITÉ — PIN LOCAL
+   Le PIN n'est jamais enregistré en clair : seul un dérivé
+   PBKDF2 + sel aléatoire est conservé dans localStorage.
+   --------------------------------------------------------- */
+WorkerTSA.pin = {
+  length: 4,
+  buffer: '',
+  firstEntry: null,
+  confirming: false,
+  storageKey: 'workerTsaPinV1'
+};
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach(function (byte) { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function derivePinHash(pin, saltBase64) {
+  if (!window.crypto || !window.crypto.subtle || !window.TextEncoder) {
+    throw new Error('La sécurité cryptographique du navigateur est indisponible.');
+  }
+  const encoder = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw', encoder.encode(pin), { name: 'PBKDF2' }, false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: base64ToBytes(saltBase64), iterations: 100000, hash: 'SHA-256' },
+    material,
+    256
+  );
+  return bytesToBase64(new Uint8Array(bits));
+}
+
+function constantTimeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return result === 0;
+}
+
+function hasLocalPin() {
+  try {
+    const record = JSON.parse(localStorage.getItem(WorkerTSA.pin.storageKey) || 'null');
+    return !!(record && record.hash && record.salt && [4, 6, 8].indexOf(Number(record.length)) !== -1);
+  } catch (e) {
+    return false;
+  }
+}
+
+function getLocalPinRecord() {
+  try {
+    return JSON.parse(localStorage.getItem(WorkerTSA.pin.storageKey) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+WorkerTSA.setPinLength = function (length) {
+  length = Number(length);
+  if ([4, 6, 8].indexOf(length) === -1) return;
+  WorkerTSA.pin.length = length;
+  WorkerTSA.pin.buffer = '';
+  WorkerTSA.pin.firstEntry = null;
+  WorkerTSA.pin.confirming = false;
+  document.querySelectorAll('.pin-length-btn').forEach(function (btn) {
+    btn.classList.toggle('selected', Number(btn.dataset.length) === length);
+  });
+  renderPinDots('pin-setup-dots', 0, length);
+  const status = document.getElementById('pin-setup-status');
+  if (status) status.textContent = 'Saisissez votre nouveau code';
+  clearPinError('pin-setup-error');
+};
+
+function renderPinDots(targetId, count, length) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  target.innerHTML = '';
+  for (let i = 0; i < length; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'pin-dot' + (i < count ? ' filled' : '');
+    dot.setAttribute('aria-hidden', 'true');
+    target.appendChild(dot);
+  }
+}
+
+function clearPinError(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('visible');
+  }
+}
+
+function showPinError(id, message) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('visible');
+}
+
+function renderPinKeypad(targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const keys = ['1','2','3','4','5','6','7','8','9','⌫','0',''];
+  target.innerHTML = keys.map(function (key) {
+    if (!key) return '<span class="pin-key-spacer" aria-hidden="true"></span>';
+    if (key === '⌫') {
+      return '<button type="button" class="pin-key pin-key-action" aria-label="Effacer" onclick="WorkerTSA.pinBackspace()">⌫</button>';
+    }
+    return '<button type="button" class="pin-key" onclick="WorkerTSA.pinDigit(\'' + key + '\')">' + key + '</button>';
+  }).join('');
+}
+
+WorkerTSA.pinDigit = function (digit) {
+  if (!/^\d$/.test(digit)) return;
+  const p = WorkerTSA.pin;
+  if (p.buffer.length >= p.length) return;
+  p.buffer += digit;
+  const isSetup = !p.unlockMode;
+  renderPinDots(isSetup ? 'pin-setup-dots' : 'pin-unlock-dots', p.buffer.length, p.length);
+  clearPinError(isSetup ? 'pin-setup-error' : 'pin-unlock-error');
+
+  if (p.buffer.length === p.length) {
+    if (isSetup) finishPinSetupEntry();
+    else verifyPin();
+  }
+};
+
+WorkerTSA.pinBackspace = function () {
+  const p = WorkerTSA.pin;
+  p.buffer = p.buffer.slice(0, -1);
+  const isSetup = !p.unlockMode;
+  renderPinDots(isSetup ? 'pin-setup-dots' : 'pin-unlock-dots', p.buffer.length, p.length);
+};
+
+async function finishPinSetupEntry() {
+  const p = WorkerTSA.pin;
+  if (!p.confirming) {
+    p.firstEntry = p.buffer;
+    p.buffer = '';
+    p.confirming = true;
+    renderPinDots('pin-setup-dots', 0, p.length);
+    const status = document.getElementById('pin-setup-status');
+    if (status) status.textContent = 'Confirmez votre code';
+    return;
+  }
+
+  if (p.buffer !== p.firstEntry) {
+    p.buffer = '';
+    p.firstEntry = null;
+    p.confirming = false;
+    renderPinDots('pin-setup-dots', 0, p.length);
+    const status = document.getElementById('pin-setup-status');
+    if (status) status.textContent = 'Saisissez un nouveau code';
+    return showPinError('pin-setup-error', 'Les deux codes ne correspondent pas.');
+  }
+
+  try {
+    const salt = new Uint8Array(16);
+    crypto.getRandomValues(salt);
+    const saltBase64 = bytesToBase64(salt);
+    const hash = await derivePinHash(p.buffer, saltBase64);
+    localStorage.setItem(p.storageKey, JSON.stringify({
+      version: 1,
+      length: p.length,
+      salt: saltBase64,
+      hash: hash
+    }));
+    p.buffer = '';
+    p.firstEntry = null;
+    p.confirming = false;
+    proceedAfterPin();
+  } catch (error) {
+    showPinError('pin-setup-error', 'Impossible d\'activer le code de sécurité sur ce navigateur.');
+  }
+}
+
+async function verifyPin() {
+  const p = WorkerTSA.pin;
+  const record = getLocalPinRecord();
+  if (!record) return startPinScreen(true);
+
+  try {
+    const hash = await derivePinHash(p.buffer, record.salt);
+    if (constantTimeEqual(hash, record.hash)) {
+      p.buffer = '';
+      proceedAfterPin();
+      return;
+    }
+  } catch (error) {
+    showPinError('pin-unlock-error', 'Impossible de vérifier le code sur ce navigateur.');
+    p.buffer = '';
+    renderPinDots('pin-unlock-dots', 0, p.length);
+    return;
+  }
+
+  p.buffer = '';
+  renderPinDots('pin-unlock-dots', 0, p.length);
+  showPinError('pin-unlock-error', 'Code incorrect. Réessayez.');
+};
+
+function proceedAfterPin() {
+  WorkerTSA.pin.unlockMode = false;
+  if (WorkerTSA.state.language) WorkerTSA.goTo('screen-auth');
+  else WorkerTSA.goTo('screen-language');
+}
+
+function startPinScreen(unlockMode) {
+  const setup = document.getElementById('pin-setup-content');
+  const unlock = document.getElementById('pin-unlock-content');
+  const p = WorkerTSA.pin;
+  p.unlockMode = !!unlockMode;
+  p.buffer = '';
+  p.firstEntry = null;
+  p.confirming = false;
+
+  if (p.unlockMode) {
+    const record = getLocalPinRecord();
+    p.length = Number(record && record.length) || 4;
+    if (setup) setup.classList.add('hidden');
+    if (unlock) unlock.classList.remove('hidden');
+    renderPinDots('pin-unlock-dots', 0, p.length);
+    renderPinKeypad('pin-unlock-keypad');
+    clearPinError('pin-unlock-error');
+  } else {
+    if (setup) setup.classList.remove('hidden');
+    if (unlock) unlock.classList.add('hidden');
+    document.querySelectorAll('.pin-length-btn').forEach(function (btn) {
+      btn.classList.toggle('selected', Number(btn.dataset.length) === p.length);
+    });
+    renderPinDots('pin-setup-dots', 0, p.length);
+    renderPinKeypad('pin-setup-keypad');
+    clearPinError('pin-setup-error');
+  }
+  WorkerTSA.goTo('screen-pin');
+}
+
+/* ---------------------------------------------------------
    LANGUE
    --------------------------------------------------------- */
 WorkerTSA.setLanguage = function (lang) {
@@ -465,13 +711,10 @@ document.addEventListener('DOMContentLoaded', function () {
   injectLogos();
   renderCategoryOptions('evenement'); // catégories par défaut pour l'écran org-11
 
-  // Écran de démarrage : passe automatiquement à la langue (ou à l'auth
-  // si la langue est déjà mémorisée) après un court délai.
+  // Écran de démarrage : image 9:16 affichée pendant 1 seconde,
+  // puis création du PIN lors de la première utilisation ou
+  // déverrouillage du PIN lors des utilisations suivantes.
   setTimeout(function () {
-    if (WorkerTSA.state.language) {
-      WorkerTSA.goTo('screen-auth');
-    } else {
-      WorkerTSA.goTo('screen-language');
-    }
-  }, 1800);
+    startPinScreen(hasLocalPin());
+  }, 1000);
 });

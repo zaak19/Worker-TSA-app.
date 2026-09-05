@@ -15,6 +15,8 @@ worker-tsa/
 ├── firebase-config.js  → Configuration et initialisation Firebase
 ├── auth.js             → Authentification (création de compte, connexion)
 ├── provider.js         → Catégories, profils organisateurs, tickets, commission
+├── icon.png            → Icône/logo officiel de l'application (carré)
+├── splash.png          → Écran de lancement 9:16
 └── README.md           → Ce fichier
 ```
 
@@ -28,6 +30,19 @@ worker-tsa/
 4. Sous "Source", sélectionne la branche `main` (ou `master`) et le dossier `/ (root)`.
 5. Ton application sera accessible à une adresse du type :
    `https://tonpseudo.github.io/nom-du-repository/`
+
+
+---
+
+## 🔐 Écran de sécurité au démarrage
+
+Au lancement, `splash.png` est affichée pendant **1 seconde**. L'application affiche ensuite un écran de code de sécurité :
+
+- première utilisation : création d'un code numérique de **4, 6 ou 8 chiffres**, avec confirmation ;
+- utilisations suivantes : déverrouillage avec le code déjà enregistré sur l'appareil ;
+- le code n'est pas enregistré en clair : l'application conserve un dérivé **PBKDF2/SHA-256 avec sel aléatoire** dans `localStorage`.
+
+Le code est un verrou d'accès local à l'interface. Il ne remplace pas l'authentification Firebase du compte utilisateur.
 
 ---
 

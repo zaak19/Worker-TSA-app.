@@ -9,22 +9,57 @@
 </head>
 <body>
 
-<!-- Logo SVG réutilisé partout (W stylisé) -->
+<!-- Logo officiel de l'application, réutilisé dans toute l'interface -->
 <template id="logo-svg-template">
-  <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="26" r="9" fill="white"/>
-    <path d="M50 40 L38 30 L20 62 L34 62 L42 48 L50 62 L58 48 L66 62 L80 62 L62 30 Z" fill="white"/>
-  </svg>
+  <img src="icon.png" alt="Logo Worker TSA" />
 </template>
 
 <!-- ============================================================
-     ÉCRAN 0 — SPLASH
+     ÉCRAN 0 — SPLASH 9:16
+     Affiche l'image de lancement pendant 1 seconde.
      ============================================================ -->
-<section id="screen-splash" class="screen screen-dark active">
-  <div class="app-icon"><div class="logo-slot"></div></div>
-  <div class="app-title">WORKER<span> TSA</span></div>
-  <div class="app-tagline">BY TRILLION SOFTWARE</div>
-  <div class="app-footer">Innover aujourd'hui, construire demain.</div>
+<section id="screen-splash" class="screen screen-splash active" aria-label="Worker TSA">
+  <img class="splash-image" src="splash.png" alt="Worker TSA — Trillion Software" />
+</section>
+
+<!-- ============================================================
+     ÉCRAN 1 — CODE DE SÉCURITÉ
+     Première utilisation : création du PIN.
+     Utilisations suivantes : déverrouillage par PIN.
+     ============================================================ -->
+<section id="screen-pin" class="screen screen-pin">
+  <div class="pin-brand">
+    <div class="pin-logo-box"><div class="logo-slot"></div></div>
+    <div class="pin-brand-name">WORKER <span>TSA</span></div>
+    <div class="pin-brand-sub">TRILLION SOFTWARE</div>
+  </div>
+
+  <div id="pin-setup-content">
+    <div class="pin-lock-icon">🔐</div>
+    <h1 class="screen-title center-text">Créez votre code de sécurité</h1>
+    <p class="screen-desc center-text">Pour protéger l'accès à votre application, choisissez un code composé de 4, 6 ou 8 chiffres.</p>
+
+    <div class="pin-length-selector" role="group" aria-label="Longueur du code">
+      <button type="button" class="pin-length-btn selected" data-length="4" onclick="WorkerTSA.setPinLength(4)">4 chiffres</button>
+      <button type="button" class="pin-length-btn" data-length="6" onclick="WorkerTSA.setPinLength(6)">6 chiffres</button>
+      <button type="button" class="pin-length-btn" data-length="8" onclick="WorkerTSA.setPinLength(8)">8 chiffres</button>
+    </div>
+
+    <div class="pin-dots" id="pin-setup-dots" aria-label="Code saisi"></div>
+    <p class="pin-status" id="pin-setup-status">Saisissez votre nouveau code</p>
+    <div class="pin-keypad" id="pin-setup-keypad"></div>
+    <p class="error-text pin-error" id="pin-setup-error"></p>
+  </div>
+
+  <div id="pin-unlock-content" class="hidden">
+    <div class="pin-lock-icon">🔒</div>
+    <h1 class="screen-title center-text">Entrez votre code</h1>
+    <p class="screen-desc center-text">Saisissez votre code de sécurité pour accéder à Worker TSA.</p>
+    <div class="pin-dots" id="pin-unlock-dots" aria-label="Code saisi"></div>
+    <p class="pin-status" id="pin-unlock-status">Code de sécurité</p>
+    <div class="pin-keypad" id="pin-unlock-keypad"></div>
+    <p class="error-text pin-error" id="pin-unlock-error"></p>
+  </div>
 </section>
 
 <!-- ============================================================
