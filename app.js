@@ -1387,16 +1387,74 @@ WorkerTSA.openAdminConsole = async function () {
   await WorkerTSA.loadAdminConsole();
 };
 
+WorkerTSA.approveEvent = async function (eventId) {
+  if (!(await WorkerTSA.requireAdmin()) || !eventId) return;
+  try {
+    await db.collection('events').doc(eventId).update({
+      status: 'published',
+      published: true,
+      approvalStatus: 'approved',
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      approvedBy: auth.currentUser.uid
+    });
+    await WorkerTSA.loadAdminConsole();
+    alert('Événement validé et publié.');
+  } catch (error) {
+    console.error('Validation événement:', error);
+    alert('Impossible de publier cet événement. Vérifiez les règles Firestore.');
+  }
+};
+
+WorkerTSA.rejectEvent = async function (eventId) {
+  if (!(await WorkerTSA.requireAdmin()) || !eventId) return;
+  try {
+    await db.collection('events').doc(eventId).update({
+      status: 'rejected',
+      published: false,
+      approvalStatus: 'rejected',
+      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      rejectedBy: auth.currentUser.uid
+    });
+    await WorkerTSA.loadAdminConsole();
+    alert('Événement refusé.');
+  } catch (error) {
+    console.error('Refus événement:', error);
+    alert('Impossible de refuser cet événement. Vérifiez les règles Firestore.');
+  }
+};
+
 WorkerTSA.loadAdminConsole = async function () {
   const eventList = document.getElementById('admin-event-list');
   const salesList = document.getElementById('admin-sales-list');
-  if (eventList) eventList.innerHTML = '<div class="empty-state">Chargement…</div>';
-  if (salesList) salesList.innerHTML = '<div class="empty-state">Chargement…</div>';
+  if (eventList) eventList.innerHTML = '<div class="empty-state">Chargement des événements…</div>';
+  if (salesList) salesList.innerHTML = '<div class="empty-state">Chargement des ventes…</div>';
+
+  if (!(await WorkerTSA.requireAdmin())) return;
+
+  // Charger les événements indépendamment des ventes : une erreur sur une
+  // collection ne doit plus masquer toute la console.
+  let events = [];
+  let sales = [];
+  let eventsError = null;
+  let salesError = null;
+
   try {
     const eventsSnap = await db.collection('events').get();
-    const events = eventsSnap.docs.map(d => ({id:d.id, ...d.data()}));
+    events = eventsSnap.docs.map(d => ({id:d.id, ...d.data()}));
+  } catch (error) {
+    console.error('Chargement événements:', error);
+    eventsError = error;
+  }
+
+  try {
     const salesSnap = await db.collection('ticketSales').get();
-    const sales = salesSnap.docs.map(d => ({id:d.id, ...d.data()}));
+    sales = salesSnap.docs.map(d => ({id:d.id, ...d.data()}));
+  } catch (error) {
+    console.error('Chargement ventes:', error);
+    salesError = error;
+  }
+
+  try {
     const total = sales.reduce((n,x)=>n+Math.max(1,Number(x.quantity||1)),0);
     const gross = sales.reduce((n,x)=>n+Number(x.grossAmount||x.price||0),0);
     const commission = sales.reduce((n,x)=>n+Number(x.commissionAmount||Math.round(Number(x.grossAmount||x.price||0)*WorkerTSA.TICKET_COMMISSION_RATE)),0);
@@ -1404,12 +1462,30 @@ WorkerTSA.loadAdminConsole = async function () {
     setText('admin-total-tickets',total); setText('admin-gross-sales',formatFCFA(gross)); setText('admin-commission',formatFCFA(commission)); setText('admin-net-sales',formatFCFA(Math.max(0,gross-commission)));
     const support=(typeof WORKER_TSA_SUPPORT_EMAIL==='string' && WORKER_TSA_SUPPORT_EMAIL) ? WORKER_TSA_SUPPORT_EMAIL : 'E-mail d’assistance non configuré';
     setText('admin-support-email',support);
-    if(eventList) eventList.innerHTML = events.length ? events.map(e=>'<article class="dashboard-event-card"><div><span class="home-kicker">'+escapeHtml(e.category||'ÉVÉNEMENT')+'</span><h3>'+escapeHtml(e.eventName||'Événement')+'</h3><p>'+formatEventDate(e.date,e.time)+' · '+escapeHtml(e.lieu||'')+'</p></div><div><strong>'+escapeHtml(e.approvalStatus||e.status||'pending')+'</strong></div></article>').join('') : '<div class="empty-state">Aucun événement.</div>';
-    if(salesList) salesList.innerHTML = sales.length ? sales.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,20).map(x=>'<article class="dashboard-event-card"><div><span class="home-kicker">VENTE TICKET</span><h3>'+escapeHtml(x.eventName||'Événement')+'</h3><p>Ticket '+escapeHtml(x.ticketCode||x.id)+' · '+formatNotificationDate(x.createdAt)+'</p></div><div><strong>'+formatFCFA(x.grossAmount||x.price||0)+'</strong><small>Commission : '+formatFCFA(x.commissionAmount||0)+'</small></div></article>').join('') : '<div class="empty-state">Aucune vente pour le moment.</div>';
+    const pendingCount = events.filter(e => e.approvalStatus === 'pending' || e.status === 'pending_review').length;
+    if(eventList) {
+      if (eventsError) {
+        eventList.innerHTML='<div class="empty-state error-state">Impossible de charger les événements. Vérifiez les règles Firestore.</div>';
+      } else if (!events.length) {
+        eventList.innerHTML='<div class="empty-state">Aucun événement soumis.</div>';
+      } else {
+        eventList.innerHTML = '<div class="info-card" style="margin-bottom:12px;"><strong>'+pendingCount+'</strong> événement(s) en attente de validation</div>' + events.map(e=>{
+          const pending = e.approvalStatus === 'pending' || e.status === 'pending_review';
+          const status = e.approvalStatus || e.status || 'pending';
+          return '<article class="dashboard-event-card"><div><span class="home-kicker">'+escapeHtml(e.category||'ÉVÉNEMENT')+'</span><h3>'+escapeHtml(e.eventName||'Événement')+'</h3><p>'+formatEventDate(e.date,e.time)+' · '+escapeHtml(e.lieu||'')+'</p><strong>Statut : '+escapeHtml(status)+'</strong></div><div>'+ (pending ? '<button class="btn btn-primary" onclick="WorkerTSA.approveEvent(\''+e.id+'\')">Valider et publier</button><button class="btn btn-outline" style="margin-top:8px;" onclick="WorkerTSA.rejectEvent(\''+e.id+'\')">Refuser</button>' : '<span class="helper-text">Aucune action requise</span>') +'</div></article>';
+        }).join('');
+      }
+    }
+    if(salesList) {
+      if (salesError) {
+        salesList.innerHTML='<div class="empty-state error-state">Les événements sont chargés, mais les ventes ne peuvent pas être lues avec les règles Firestore actuelles.</div>';
+      } else {
+        salesList.innerHTML = sales.length ? sales.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,20).map(x=>'<article class="dashboard-event-card"><div><span class="home-kicker">VENTE TICKET</span><h3>'+escapeHtml(x.eventName||'Événement')+'</h3><p>Ticket '+escapeHtml(x.ticketCode||x.id)+' · '+formatNotificationDate(x.createdAt)+'</p></div><div><strong>'+formatFCFA(x.grossAmount||x.price||0)+'</strong><small>Commission : '+formatFCFA(x.commissionAmount||0)+'</small></div></article>').join('') : '<div class="empty-state">Aucune vente pour le moment.</div>';
+      }
+    }
   } catch(error) {
-    console.error(error);
-    if(eventList) eventList.innerHTML='<div class="empty-state error-state">Impossible de charger la console. Vérifiez les droits administrateur Firebase.</div>';
-    if(salesList) salesList.innerHTML='';
+    console.error('Console admin:', error);
+    if(eventList && eventsError) eventList.innerHTML='<div class="empty-state error-state">Impossible de charger les événements. Vérifiez les règles Firestore.</div>';
   }
 };
 

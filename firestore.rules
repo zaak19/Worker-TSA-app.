@@ -29,9 +29,14 @@ service cloud.firestore {
       allow create: if signedIn()
                     && request.resource.data.organizerId == request.auth.uid
                     && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur';
-      allow update, delete: if signedIn()
-                            && resource.data.organizerId == request.auth.uid
-                            && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur';
+      allow update: if isAdmin()
+                     || (signedIn()
+                         && resource.data.organizerId == request.auth.uid
+                         && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur');
+      allow delete: if isAdmin()
+                    || (signedIn()
+                        && resource.data.organizerId == request.auth.uid
+                        && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur');
     }
 
     match /ticketLimits/{limitId} {
