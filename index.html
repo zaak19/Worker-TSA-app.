@@ -4,8 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Worker TSA — par Trillion Software</title>
-<link rel="stylesheet" href="styles.css?v=9" />
+<link rel="stylesheet" href="styles.css?v=11" />
 <link rel="icon" href="icon.png" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -127,6 +128,29 @@
 </section>
 
 <!-- ============================================================
+     ÉCRAN — CONNEXION DIRECTE
+     ============================================================ -->
+<section id="screen-login" class="screen">
+  <div class="brand-header">
+    <div class="logo-box"><div class="logo-slot"></div></div>
+    <div class="brand-name">Worker TSA</div>
+    <div class="brand-sub">par Trillion Software</div>
+  </div>
+  <h1 class="screen-title">Se connecter</h1>
+  <p class="screen-desc">Connectez-vous avec le compte Worker TSA que vous avez déjà créé.</p>
+  <label class="field-label">Adresse e-mail</label>
+  <input type="email" id="direct-login-email" placeholder="Votre e-mail" autocomplete="email" />
+  <label class="field-label">Mot de passe</label>
+  <div class="field-with-icon">
+    <input type="password" id="direct-login-password" placeholder="Votre mot de passe" autocomplete="current-password" />
+    <button type="button" class="toggle-eye" onclick="WorkerTSA.togglePassword('direct-login-password')">👁</button>
+  </div>
+  <p class="error-text" id="direct-login-error"></p>
+  <button class="btn btn-primary" onclick="WorkerTSA.handleDirectLogin()">Se connecter</button>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-auth')">Retour</button>
+</section>
+
+<!-- ============================================================
      ÉCRAN — CHOIX DU PROFIL (Organisateur / Client)
      ============================================================ -->
 <section id="screen-profile-type" class="screen">
@@ -188,7 +212,7 @@
 
   <button class="btn btn-primary" onclick="WorkerTSA.orgStep1Next()">Créer mon compte</button>
   <p class="center-text helper-text" style="margin-top:14px;">
-    Vous avez déjà un compte ? <button class="btn-link" onclick="WorkerTSA.goTo('screen-auth')">Se connecter</button>
+    Vous avez déjà un compte ? <button class="btn-link" onclick="WorkerTSA.openLogin()">Se connecter</button>
   </p>
 </section>
 
@@ -547,8 +571,9 @@
   <label class="field-label">Lieu</label>
   <input type="text" id="main-lieu" placeholder="Ex : Lomé, Togo" />
 
-  <label class="field-label">Localisation précise (lien Google Maps)</label>
-  <input type="url" id="main-maps-link" placeholder="Collez votre lien Google Maps ici" />
+  <label class="field-label">E-mail professionnel de contact</label>
+  <input type="email" id="main-professional-email" placeholder="exemple@votreentreprise.com" autocomplete="email" />
+  <p class="helper-text">Cet e-mail peut être utilisé pour les échanges professionnels et le signalement d’un problème.</p>
 
   <div class="verif-block">
     <div class="verif-header">🪪 Vérification d'identité <span class="required-tag">Obligatoire</span></div>
@@ -636,6 +661,9 @@
   <p class="helper-text center-text">Vous recevrez un e-mail dès que votre profil sera validé. Le délai habituel est de 24 à 48 heures.</p>
 
   <button class="btn btn-primary" onclick="WorkerTSA.goTo('screen-home')">Accéder à l'accueil</button>
+  <div style="height:10px;"></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.simulateEventApproval()">✓ Simuler la validation de mon événement</button>
+  <p class="helper-text center-text">MODE TEST : en production, cette validation sera effectuée par l'équipe Worker TSA après vérification.</p>
   <div style="height:10px;"></div>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-11')">Modifier mon profil</button>
 </section>
@@ -754,6 +782,21 @@
 </section>
 
 <!-- ============================================================
+     VALIDATION DE PAIEMENT — PARTICIPANT
+     ============================================================ -->
+<section id="screen-ticket-payment" class="screen">
+  <div class="brand-header"><div class="logo-box"><div class="logo-slot"></div></div><div class="brand-name">Worker TSA</div><div class="brand-sub">Validation du paiement</div></div>
+  <span class="home-kicker">PAIEMENT DU TICKET</span>
+  <h1 class="screen-title">Confirmer mon achat</h1>
+  <p class="screen-desc">Dans cette version de test, le paiement est simulé. Après validation, Worker TSA génère immédiatement votre ticket unique.</p>
+  <div class="info-card payment-confirm-card"><div><span>Événement</span><strong id="payment-event-name">—</strong></div><div><span>Participant</span><strong id="payment-buyer-name">—</strong></div><div><span>Montant</span><strong id="payment-ticket-price">0 FCFA</strong></div><div><span>Tickets pour cet événement</span><strong id="payment-limit-count">0/5</strong></div></div>
+  <div class="notification-card"><div class="notification-channel">✉ CONFIRMATION SIMULÉE</div><h2>Après validation</h2><p>Vous recevrez une confirmation dans l'application et une notification e-mail simulée. Votre ticket sera disponible immédiatement dans « Mes tickets » et pourra être téléchargé en PDF.</p></div>
+  <p class="error-text" id="ticket-payment-error"></p>
+  <button class="btn btn-primary" id="btn-confirm-ticket-payment" onclick="WorkerTSA.validateTicketPayment()">Valider le paiement (simulation)</button>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-ticket-buy')">Retour</button>
+</section>
+
+<!-- ============================================================
      MES TICKETS
      ============================================================ -->
 <section id="screen-my-tickets" class="screen">
@@ -774,13 +817,16 @@
     <div class="ticket-detail-grid"><div><span>TYPE DE TICKET</span><strong id="ticket-detail-type">Standard</strong></div><div><span>NOM</span><strong id="ticket-detail-last-name">—</strong></div><div><span>PRIX</span><strong id="ticket-detail-price">0 FCFA</strong></div><div><span>PRÉNOM</span><strong id="ticket-detail-first-name">—</strong></div><div><span>N° DE TICKET</span><strong id="ticket-detail-code">XXXXXXXX</strong></div><div><span>ACHETÉ LE</span><strong id="ticket-detail-bought">—</strong></div></div>
     <div class="ticket-entry-note"><strong>Important</strong><p>Présentez ce ticket et votre pièce d'identité à l'entrée de l'événement.</p><small>Ce ticket ne contient aucun QR code.</small></div>
   </article>
-  <button class="btn btn-primary" onclick="WorkerTSA.openMyTickets()">Retour à mes tickets</button>
+  <button class="btn btn-primary" onclick="WorkerTSA.downloadTicketPDF()">Télécharger mon ticket en PDF</button>
+  <div style="height:10px;"></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.openMyTickets()">Retour à mes tickets</button>
 </section>
 
 <!-- ============================================================
      PARCOURS PARTICIPANT — Choix du type
      ============================================================ -->
 <section id="screen-part-type" class="screen">
+  <div class="top-back-row"><button class="btn-link back-link" onclick="WorkerTSA.goTo('screen-home')">← Retour</button></div>
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
@@ -827,6 +873,45 @@
 </section>
 
 <!-- ============================================================
+     NOTIFICATIONS / E-MAILS SIMULÉS
+     ============================================================ -->
+<section id="screen-notifications" class="screen screen-dashboard">
+  <div class="dashboard-head"><div><span class="home-kicker">CENTRE DE NOTIFICATIONS</span><h1 class="screen-title">Mes messages</h1><p class="screen-desc">Historique des confirmations simulées envoyées par Worker TSA.</p></div><button class="refresh-btn" onclick="WorkerTSA.openNotifications()">↻</button></div>
+  <div id="notification-list" class="notification-list"></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
+</section>
+
+<!-- ============================================================
+     CONSOLE ADMINISTRATEUR — TRILLION SOFTWARE
+     Accès réservé aux comptes Firebase portant le custom claim admin=true.
+     ============================================================ -->
+<section id="screen-admin" class="screen screen-dashboard">
+  <div class="dashboard-head">
+    <div><span class="home-kicker">TRILLION SOFTWARE</span><h1 class="screen-title">Console de contrôle</h1><p class="screen-desc">Vue centrale des événements, tickets, montants et commissions Worker TSA.</p></div>
+    <button class="refresh-btn" onclick="WorkerTSA.openAdminConsole()" aria-label="Actualiser">↻</button>
+  </div>
+  <div class="dashboard-stats">
+    <div class="stat-card"><span>Tickets vendus</span><strong id="admin-total-tickets">0</strong></div>
+    <div class="stat-card"><span>Ventes brutes</span><strong id="admin-gross-sales">0 FCFA</strong></div>
+    <div class="stat-card"><span>Commission 5 %</span><strong id="admin-commission">0 FCFA</strong></div>
+    <div class="stat-card stat-card-highlight"><span>Net organisateurs</span><strong id="admin-net-sales">0 FCFA</strong></div>
+  </div>
+  <div class="admin-panel">
+    <div class="panel-title-row"><div><h2>Événements</h2><p>Validation et publication des événements soumis.</p></div></div>
+    <div id="admin-event-list" class="dashboard-event-list"></div>
+  </div>
+  <div class="admin-panel">
+    <div class="panel-title-row"><div><h2>Dernières ventes</h2><p>Vue financière et opérationnelle sans afficher les noms/prénoms des participants.</p></div></div>
+    <div id="admin-sales-list" class="dashboard-event-list"></div>
+  </div>
+  <div class="admin-panel">
+    <div class="panel-title-row"><div><h2>Assistance</h2><p>E-mail professionnel Worker TSA à renseigner dans <code>firebase-config.js</code>.</p></div></div>
+    <p class="info-card"><strong id="admin-support-email">E-mail d’assistance non configuré</strong></p>
+  </div>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
+</section>
+
+<!-- ============================================================
      ACCUEIL — tableau de bord d'entrée
      ============================================================ -->
 <section id="screen-home" class="screen screen-home">
@@ -841,11 +926,13 @@
     <p class="screen-desc">Découvrez des événements et des services, ou gérez votre activité professionnelle depuis votre espace.</p>
   </div>
   <div class="home-role-badge" id="home-role-badge">Client / Participant</div><div class="home-actions">
+    <button class="home-action-card" onclick="WorkerTSA.openNotifications()"><span class="home-action-icon">✉️</span><span><strong>Mes messages</strong><small>Confirmations et validations</small></span><span class="home-arrow">›</span></button>
     <button class="home-action-card" onclick="WorkerTSA.goTo('screen-part-type')">
       <span class="home-action-icon">🎟</span>
       <span><strong>Découvrir</strong><small>Événements et services</small></span>
       <span class="home-arrow">›</span>
     </button>
+    <button class="home-action-card" id="home-admin-action" onclick="WorkerTSA.openAdminConsole()" style="display:none;"><span class="home-action-icon">🛡️</span><span><strong>Console Trillion Software</strong><small>Contrôle et finances</small></span><span class="home-arrow">›</span></button>
     <button class="home-action-card" id="home-pro-action" onclick="WorkerTSA.openOrganizerDashboard()" style="display:none;">
       <span class="home-action-icon">📊</span>
       <span><strong>Espace vendeur</strong><small>Ventes, fonds et retraits</small></span>
@@ -862,9 +949,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=9"></script>
-<script src="auth.js?v=9"></script>
-<script src="provider.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="firebase-config.js?v=11"></script>
+<script src="auth.js?v=11"></script>
+<script src="provider.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

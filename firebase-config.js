@@ -34,3 +34,5 @@ const db = firebase.firestore();
       par une vraie intégration (Autocomplete / carte interactive)
    --------------------------------------------------------- */
 const GOOGLE_MAPS_API_KEY = ""; // à renseigner plus tard
+// E-mail professionnel d'assistance Worker TSA — à renseigner par Trillion Software.
+const WORKER_TSA_SUPPORT_EMAIL = '';

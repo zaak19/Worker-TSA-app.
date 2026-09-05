@@ -167,3 +167,23 @@ La génération du code et la limite de 5 tickets sont gérées par une transact
 ### Règles Firestore v9
 
 Le fichier `firestore.rules` fourni avec cette version est destiné à être copié dans **Firebase Console > Firestore Database > Rules** puis publié. Les règles empêchent notamment les participants de lire les ventes d'autres participants, les organisateurs de lire les tickets d'autres organisateurs et les utilisateurs de modifier/supprimer un ticket après sa création.
+
+
+## V10 — scénario de test validation et achat
+- Les événements nouvellement enregistrés sont `pending_review` et ne sont pas visibles dans la liste publique tant qu'ils ne sont pas approuvés.
+- Le bouton « Simuler la validation de mon événement » permet au compte organisateur de tester le passage à `published`. En production, cette action devra être déplacée vers un outil réservé à l'équipe Worker TSA.
+- Les achats de tickets passent par un écran de validation simulée, puis créent un ticket individuel avec un code alphanumérique unique de 8 caractères.
+- Chaque compte est limité à 5 tickets pour un même événement.
+- Les confirmations sont enregistrées comme notifications/e-mails simulés dans Firestore. Elles ne sont pas envoyées à une boîte Gmail réelle tant qu'un service d'e-mail backend n'est pas connecté.
+- Un ticket validé peut être téléchargé en PDF depuis l'écran du ticket.
+
+
+## V11
+- Connexion directe dédiée depuis le parcours professionnel.
+- Retour explicite depuis « Que recherchez-vous ? » vers l'accueil.
+- E-mail professionnel de contact dans le profil organisateur.
+- Console Trillion Software réservée au custom claim Firebase `admin=true`.
+- Console financière agrégée : tickets, ventes brutes, commission 5 %, net organisateurs ; noms/prénoms des participants non affichés.
+- Création d'une alerte `adminAlerts` lors d'une vente, sans identité du participant.
+- `WORKER_TSA_SUPPORT_EMAIL` à renseigner dans `firebase-config.js`.
+- Paiements et validation restent simulés dans cette version de test.

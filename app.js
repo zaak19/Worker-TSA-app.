@@ -33,8 +33,10 @@ WorkerTSA.state = {
   accountProfile: null,
   selectedEvent: null,
   selectedTicket: null,
+  pendingTicketPurchase: null,
   organizerDashboard: { events: [], selectedEventId: null, withdrawalMethod: null },
-  addingEvent: false
+  addingEvent: false,
+  isAdmin: false
 };
 
 WorkerTSA.MAX_ORGANIZER_EVENTS = 5;
@@ -43,6 +45,7 @@ WorkerTSA.MAX_ORGANIZER_EVENTS = 5;
    NAVIGATION
    --------------------------------------------------------- */
 WorkerTSA.PROTECTED_ORGANIZER_SCREENS = ['screen-org-1','screen-org-2','screen-org-3','screen-org-4','screen-org-5','screen-org-6','screen-org-7','screen-org-8','screen-org-9','screen-org-10','screen-org-11','screen-org-pending','screen-new-event','screen-organizer-dashboard'];
+WorkerTSA.ADMIN_SCREEN = 'screen-admin';
 WorkerTSA.goTo = function (screenId) {
   if (WorkerTSA.PROTECTED_ORGANIZER_SCREENS.indexOf(screenId) !== -1 && WorkerTSA.state.accountRole !== 'organisateur') {
     console.warn('Accès professionnel refusé.');
@@ -350,6 +353,38 @@ WorkerTSA.loadAccountProfile = async function (uid) {
   }
 };
 
+WorkerTSA.checkAdminClaim = async function () {
+  try {
+    if (!auth.currentUser) return false;
+    const token = await auth.currentUser.getIdTokenResult(true);
+    return !!(token && token.claims && token.claims.admin === true);
+  } catch (error) { return false; }
+};
+
+WorkerTSA.openLogin = function () {
+  const source = document.getElementById('signup-email');
+  const target = document.getElementById('direct-login-email');
+  if (source && target && source.value.trim()) target.value = source.value.trim();
+  WorkerTSA.goTo('screen-login');
+};
+
+WorkerTSA.handleDirectLogin = async function () {
+  const email = document.getElementById('direct-login-email').value.trim();
+  const password = document.getElementById('direct-login-password').value;
+  const errorEl = document.getElementById('direct-login-error');
+  errorEl.classList.remove('visible');
+  if (!WorkerTSA.isValidEmail(email) || !password) return showError(errorEl, 'Veuillez renseigner un e-mail et un mot de passe valides.');
+  try {
+    const cred = await WorkerTSA.signIn(email, password);
+    WorkerTSA.state.currentUserId = cred.user.uid;
+    WorkerTSA.state.isAdmin = await WorkerTSA.checkAdminClaim();
+    const profile = await WorkerTSA.loadAccountProfile(cred.user.uid);
+    WorkerTSA.state.profileType = profile && profile.accountRole ? profile.accountRole : null;
+    WorkerTSA.refreshHomeRoleUI();
+    WorkerTSA.goTo('screen-home');
+  } catch (err) { showError(errorEl, translateFirebaseError(err)); }
+};
+
 WorkerTSA.saveAccountRole = async function (uid, role) {
   if (!uid || ['participant','organisateur'].indexOf(role) === -1) throw new Error('Rôle de compte invalide.');
   const ref = db.collection('providers').doc(uid);
@@ -427,11 +462,15 @@ WorkerTSA.handleLogin = async function () {
   try {
     const cred = await WorkerTSA.signIn(email, password);
     WorkerTSA.state.currentUserId = cred.user.uid;
-
-    // Après une connexion Firebase réussie, on reprend le parcours
-    // de l'application avec l'écran de choix du profil déjà présent
-    // dans le projet, au lieu d'afficher le placeholder d'accueil.
-    WorkerTSA.goTo('screen-profile-type');
+    WorkerTSA.state.isAdmin = await WorkerTSA.checkAdminClaim();
+    const profile = await WorkerTSA.loadAccountProfile(cred.user.uid);
+    if (profile && profile.accountRole) {
+      WorkerTSA.state.profileType = profile.accountRole;
+      WorkerTSA.refreshHomeRoleUI();
+      WorkerTSA.goTo('screen-home');
+    } else {
+      WorkerTSA.goTo('screen-profile-type');
+    }
   } catch (err) {
     showError(errorEl, translateFirebaseError(err));
   }
@@ -500,8 +539,10 @@ WorkerTSA.confirmProfileType = async function () {
 
 WorkerTSA.refreshHomeRoleUI = function () {
   const proButton = document.getElementById('home-pro-action');
+  const adminButton = document.getElementById('home-admin-action');
   const roleBadge = document.getElementById('home-role-badge');
   if (proButton) proButton.style.display = WorkerTSA.state.accountRole === 'organisateur' ? '' : 'none';
+  if (adminButton) adminButton.style.display = WorkerTSA.state.isAdmin ? '' : 'none';
   if (roleBadge) roleBadge.textContent = WorkerTSA.state.accountRole === 'organisateur' ? 'Organisateur / Prestataire' : 'Client / Participant';
 };
 
@@ -825,6 +866,7 @@ WorkerTSA.validateMainProfile = async function () {
     whatsapp: whatsapp,
     lieu: lieu,
     mapsLink: mapsLink,
+    professionalEmail: ((document.getElementById('main-professional-email') || {}).value || '').trim(),
     identityVerification: 'submitted'
   };
 
@@ -886,7 +928,10 @@ WorkerTSA.publishEvent = async function () {
     registrationFeeStatus: 'paid_simulated',
     commissionRate: WorkerTSA.TICKET_COMMISSION_RATE,
     commissionAmount: commission.commission,
-    netAmount: commission.net
+    netAmount: commission.net,
+    status: 'pending_review',
+    published: false,
+    approvalStatus: 'pending'
   };
 
   let savedEventId = null;
@@ -894,19 +939,69 @@ WorkerTSA.publishEvent = async function () {
     const result = await WorkerTSA.saveEventTicket(WorkerTSA.state.currentUserId, { ...ticketData, ticketsSold: 0, grossSales: 0, totalCommission: 0 });
     if (!result.success) return showError(errorEl, 'Impossible d’enregistrer l’événement pour le moment.');
     savedEventId = result.eventId;
-    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { profileType: 'organisateur', onboardingComplete: true, publishedEventId: savedEventId });
+    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { profileType: 'organisateur', accountRole: 'organisateur', onboardingComplete: true, publishedEventId: savedEventId, eventApprovalStatus: 'pending' });
+    await WorkerTSA.createNotification(WorkerTSA.state.currentUserId, {
+      type: 'event_review', channel: 'email', subject: 'Votre événement est en cours de vérification',
+      title: 'Événement reçu par Worker TSA',
+      message: 'Votre événement « ' + eventName.replace(/'/g, "\'") + ' » a bien été enregistré. Pour cette démonstration, vous pouvez simuler la validation de notre équipe.',
+      relatedEventId: savedEventId
+    });
   }
   WorkerTSA.state.org.publishedEventId = savedEventId;
 
-  if (WorkerTSA.state.addingEvent) {
-    WorkerTSA.state.addingEvent = false;
-    WorkerTSA.state.org.eventRegistrationFee = null;
+  // Tout événement, y compris un événement supplémentaire, passe par la validation Worker TSA.
+  WorkerTSA.state.addingEvent = false;
+  WorkerTSA.state.org.eventRegistrationFee = null;
+  WorkerTSA.goTo('screen-org-pending');
+};
+
+/* ---------------------------------------------------------
+   SIMULATION DE VALIDATION D'UN ÉVÉNEMENT
+   En production, cette action sera réservée à l'équipe Worker TSA.
+   --------------------------------------------------------- */
+WorkerTSA.simulateEventApproval = async function () {
+  if (!(await WorkerTSA.requireOrganizer())) return;
+  const eventId = WorkerTSA.state.org.publishedEventId;
+  if (!eventId) return alert('Aucun événement en attente de validation.');
+  try {
+    await db.collection('events').doc(eventId).update({ status: 'published', published: true, approvalStatus: 'approved', approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { eventApprovalStatus: 'approved' });
+    const event = await db.collection('events').doc(eventId).get();
+    const name = event.exists ? ((event.data() || {}).eventName || 'Votre événement') : 'Votre événement';
+    await WorkerTSA.createNotification(WorkerTSA.state.currentUserId, {
+      type: 'event_approved', channel: 'email', subject: 'Votre événement a été validé',
+      title: 'Événement validé et publié',
+      message: 'Bonne nouvelle : « ' + name.replace(/'/g, "\'") + ' » est maintenant validé et visible par le public sur Worker TSA.',
+      relatedEventId: eventId
+    });
+    alert('Simulation terminée : votre événement est maintenant publié et visible par les participants.');
     WorkerTSA.goTo('screen-organizer-dashboard');
     await WorkerTSA.loadOrganizerDashboard();
-  } else {
-    WorkerTSA.goTo('screen-org-pending');
+  } catch (error) {
+    console.error(error);
+    alert('Impossible de simuler la validation pour le moment.');
   }
 };
+
+WorkerTSA.openNotifications = async function () {
+  if (!WorkerTSA.state.currentUserId) { WorkerTSA.goTo('screen-auth'); return; }
+  WorkerTSA.goTo('screen-notifications');
+  const list = document.getElementById('notification-list');
+  if (!list) return;
+  list.innerHTML = '<div class="empty-state">Chargement des notifications…</div>';
+  try {
+    const notes = await WorkerTSA.getNotifications(WorkerTSA.state.currentUserId);
+    if (!notes.length) { list.innerHTML = '<div class="empty-state">Aucune notification pour le moment.</div>'; return; }
+    list.innerHTML = notes.map(function(n){
+      return '<article class="notification-card"><div class="notification-channel">✉ E-MAIL SIMULÉ</div><h2>'+escapeHtml(n.title||'Notification Worker TSA')+'</h2><p>'+escapeHtml(n.message||'')+'</p><small>'+formatNotificationDate(n.createdAt)+'</small></article>';
+    }).join('');
+  } catch (error) { list.innerHTML = '<div class="empty-state error-state">Impossible de charger les notifications.</div>'; }
+};
+
+function formatNotificationDate(value){
+  const d=value && value.toDate ? value.toDate() : (value ? new Date(value) : new Date());
+  return Number.isNaN(d.getTime()) ? 'Date indisponible' : d.toLocaleDateString('fr-FR')+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
 
 /* ---------------------------------------------------------
    AJOUT D'UN ÉVÉNEMENT SUPPLÉMENTAIRE
@@ -1099,7 +1194,7 @@ WorkerTSA.openParticipantEvents = async function () {
   try {
     const snap = await db.collection('events').get();
     const events = snap.docs.map(function (doc) { return { id: doc.id, ...doc.data() }; })
-      .filter(function (e) { return e.eventName && e.price > 0; })
+      .filter(function (e) { return e.eventName && e.price > 0 && e.status === 'published' && e.published === true; })
       .sort(function (a,b) { return String(a.date || '').localeCompare(String(b.date || '')); });
     WorkerTSA.state.participantEvents = events;
     if (!list) return;
@@ -1146,22 +1241,66 @@ WorkerTSA.buyTicket = async function () {
   const firstName = document.getElementById('buy-first-name').value.trim();
   const lastName = document.getElementById('buy-last-name').value.trim();
   if (!firstName || !lastName) return showError(errorEl, 'Nom et prénom obligatoires.');
-  const button = document.getElementById('btn-buy-ticket');
-  button.disabled = true;
-  button.textContent = 'Génération du ticket…';
+  const count = await WorkerTSA.getParticipantTicketCount(WorkerTSA.state.currentUserId, event.id);
+  if (count >= WorkerTSA.MAX_TICKETS_PER_EVENT) return showError(errorEl, 'Vous avez atteint la limite de 5 tickets pour cet événement.');
+  WorkerTSA.state.pendingTicketPurchase = { event: event, firstName: firstName, lastName: lastName };
+  document.getElementById('payment-event-name').textContent = event.eventName || 'Événement';
+  document.getElementById('payment-ticket-price').textContent = formatFCFA(event.price);
+  document.getElementById('payment-buyer-name').textContent = firstName + ' ' + lastName;
+  document.getElementById('payment-limit-count').textContent = count + '/5';
+  document.getElementById('ticket-payment-error').classList.remove('visible');
+  WorkerTSA.goTo('screen-ticket-payment');
+};
+
+WorkerTSA.validateTicketPayment = async function () {
+  const purchase = WorkerTSA.state.pendingTicketPurchase;
+  if (!purchase) return;
+  const button = document.getElementById('btn-confirm-ticket-payment');
+  const errorEl = document.getElementById('ticket-payment-error');
+  errorEl.classList.remove('visible');
+  button.disabled = true; button.textContent = 'Validation du paiement…';
   try {
-    const result = await WorkerTSA.recordTicketSale(event.id, { firstName:firstName, lastName:lastName, unitPrice:event.price });
+    const result = await WorkerTSA.recordTicketSale(purchase.event.id, { firstName: purchase.firstName, lastName: purchase.lastName, unitPrice: purchase.event.price });
     if (!result.success) throw result.error;
     WorkerTSA.state.selectedTicket = result.ticket;
-    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { firstName:firstName, lastName:lastName });
+    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { firstName:purchase.firstName, lastName:purchase.lastName });
+    try { await db.collection('adminAlerts').add({ type:'ticket_sale', eventId:purchase.event.id, eventName:purchase.event.eventName||'Événement', amount:Number(purchase.event.price)||0, commission:Math.round((Number(purchase.event.price)||0)*WorkerTSA.TICKET_COMMISSION_RATE), ticketCode:result.ticketCode, createdAt:firebase.firestore.FieldValue.serverTimestamp() }); } catch(alertError) { console.warn('Alerte admin non enregistrée :', alertError); }
+    await WorkerTSA.createNotification(WorkerTSA.state.currentUserId, {
+      type:'ticket_payment', channel:'email', subject:'Paiement de ticket confirmé',
+      title:'Paiement confirmé — votre ticket est prêt',
+      message:'Votre paiement pour « '+String(purchase.event.eventName||'Événement').replace(/'/g,"\'")+' » a été validé dans cette simulation. Votre ticket '+result.ticketCode+' est disponible dans « Mes tickets ».',
+      relatedTicketId: result.ticketCode, relatedEventId: purchase.event.id
+    });
+    WorkerTSA.state.pendingTicketPurchase = null;
     WorkerTSA.renderTicketDetail(result.ticket);
     WorkerTSA.goTo('screen-ticket-detail');
   } catch (error) {
-    showError(errorEl, error.message === 'MAX_TICKETS' ? 'Vous avez atteint la limite de 5 tickets pour cet événement.' : (error.message || 'Achat impossible pour le moment.'));
+    showError(errorEl, error.message === 'MAX_TICKETS' ? 'Vous avez atteint la limite de 5 tickets pour cet événement.' : (error.message || 'Paiement impossible pour le moment.'));
   } finally {
-    button.disabled = false;
-    button.textContent = 'Payer et générer mon ticket';
+    button.disabled = false; button.textContent = 'Valider le paiement (simulation)';
   }
+};
+
+WorkerTSA.downloadTicketPDF = function () {
+  const ticket = WorkerTSA.state.selectedTicket;
+  if (!ticket) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('Le générateur PDF n’est pas disponible.'); return; }
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:[90,130]});
+  const burgundy=[91,27,43], cream=[255,248,241], light=[249,232,236], text=[49,39,42];
+  doc.setFillColor.apply(doc, cream); doc.rect(0,0,90,130,'F');
+  doc.setFillColor.apply(doc, burgundy); doc.rect(0,0,17,130,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(7); doc.text('TICKET',8.5,22,{angle:90,align:'center'});
+  doc.setFontSize(11); doc.text('WORKER TSA',8.5,67,{angle:90,align:'center'});
+  doc.setTextColor.apply(doc, burgundy); doc.setFontSize(8); doc.text(String(ticket.category||'ÉVÉNEMENT').toUpperCase(),23,15);
+  doc.setFontSize(17); doc.text(String(ticket.eventName||'Événement'),23,25,{maxWidth:61});
+  doc.setTextColor.apply(doc,text); doc.setFontSize(9); doc.text('✓ VALIDE',68,14,{align:'right'});
+  doc.setDrawColor(180,160,165); doc.setLineDashPattern([2,2],0); doc.line(18,36,87,36); doc.setLineDashPattern([],0);
+  const rows=[['DATE',formatEventDate(ticket.date,ticket.time)],['LIEU',ticket.lieu||'—'],['TYPE',ticket.ticketType||'Standard'],['NOM',ticket.lastName||'—'],['PRÉNOM',ticket.firstName||'—'],['PRIX',formatFCFA(ticket.price)],['N° DE TICKET',ticket.ticketCode||'—'],['ACHETÉ LE',formatNotificationDate(ticket.createdAt)]];
+  let y=46; doc.setFontSize(6);
+  rows.forEach(function(r){ doc.setTextColor.apply(doc,burgundy); doc.text(r[0],23,y); doc.setTextColor.apply(doc,text); doc.setFontSize(8); doc.text(String(r[1]),23,y+5,{maxWidth:62}); doc.setFontSize(6); y+=10; });
+  doc.setFillColor.apply(doc,light); doc.roundedRect(22,112,64,12,3,3,'F'); doc.setTextColor.apply(doc,burgundy); doc.setFontSize(6.5); doc.text('Présentez ce ticket + votre pièce d’identité.',54,119,{align:'center'});
+  doc.save('Worker-TSA-'+(ticket.ticketCode||'ticket')+'.pdf');
 };
 
 WorkerTSA.openMyTickets = async function () {
@@ -1204,6 +1343,64 @@ WorkerTSA.renderTicketDetail = function(ticket){
 function escapeHtml(value){
   return String(value == null ? '' : value).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});
 }
+
+WorkerTSA.createNotification = async function(uid, data){
+  if(!uid) return {success:false};
+  try { await db.collection('notifications').add(Object.assign({}, data || {}, { userId:uid, createdAt:firebase.firestore.FieldValue.serverTimestamp() })); return {success:true}; }
+  catch(error){ console.warn('Notification non enregistrée :',error); return {success:false,error:error}; }
+};
+
+WorkerTSA.getNotifications = async function(uid){
+  if(!uid) return [];
+  const snap=await db.collection('notifications').where('userId','==',uid).get();
+  return snap.docs.map(function(doc){return {id:doc.id,...doc.data()};}).sort(function(a,b){
+    const ad=a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0, bd=b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0; return bd-ad;
+  });
+};
+
+/* ---------------------------------------------------------
+   CONSOLE ADMINISTRATEUR — TRILLION SOFTWARE
+   Accès par custom claim Firebase: admin=true.
+   --------------------------------------------------------- */
+WorkerTSA.requireAdmin = async function () {
+  if (!auth.currentUser) { WorkerTSA.goTo('screen-auth'); return false; }
+  const ok = await WorkerTSA.checkAdminClaim();
+  WorkerTSA.state.isAdmin = ok;
+  if (!ok) { alert('Accès refusé : console réservée à Trillion Software.'); WorkerTSA.goTo('screen-home'); return false; }
+  return true;
+};
+
+WorkerTSA.openAdminConsole = async function () {
+  if (!(await WorkerTSA.requireAdmin())) return;
+  WorkerTSA.goTo('screen-admin');
+  await WorkerTSA.loadAdminConsole();
+};
+
+WorkerTSA.loadAdminConsole = async function () {
+  const eventList = document.getElementById('admin-event-list');
+  const salesList = document.getElementById('admin-sales-list');
+  if (eventList) eventList.innerHTML = '<div class="empty-state">Chargement…</div>';
+  if (salesList) salesList.innerHTML = '<div class="empty-state">Chargement…</div>';
+  try {
+    const eventsSnap = await db.collection('events').get();
+    const events = eventsSnap.docs.map(d => ({id:d.id, ...d.data()}));
+    const salesSnap = await db.collection('ticketSales').get();
+    const sales = salesSnap.docs.map(d => ({id:d.id, ...d.data()}));
+    const total = sales.reduce((n,x)=>n+Math.max(1,Number(x.quantity||1)),0);
+    const gross = sales.reduce((n,x)=>n+Number(x.grossAmount||x.price||0),0);
+    const commission = sales.reduce((n,x)=>n+Number(x.commissionAmount||Math.round(Number(x.grossAmount||x.price||0)*WorkerTSA.TICKET_COMMISSION_RATE)),0);
+    const setText=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    setText('admin-total-tickets',total); setText('admin-gross-sales',formatFCFA(gross)); setText('admin-commission',formatFCFA(commission)); setText('admin-net-sales',formatFCFA(Math.max(0,gross-commission)));
+    const support=(typeof WORKER_TSA_SUPPORT_EMAIL==='string' && WORKER_TSA_SUPPORT_EMAIL) ? WORKER_TSA_SUPPORT_EMAIL : 'E-mail d’assistance non configuré';
+    setText('admin-support-email',support);
+    if(eventList) eventList.innerHTML = events.length ? events.map(e=>'<article class="dashboard-event-card"><div><span class="home-kicker">'+escapeHtml(e.category||'ÉVÉNEMENT')+'</span><h3>'+escapeHtml(e.eventName||'Événement')+'</h3><p>'+formatEventDate(e.date,e.time)+' · '+escapeHtml(e.lieu||'')+'</p></div><div><strong>'+escapeHtml(e.approvalStatus||e.status||'pending')+'</strong></div></article>').join('') : '<div class="empty-state">Aucun événement.</div>';
+    if(salesList) salesList.innerHTML = sales.length ? sales.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,20).map(x=>'<article class="dashboard-event-card"><div><span class="home-kicker">VENTE TICKET</span><h3>'+escapeHtml(x.eventName||'Événement')+'</h3><p>Ticket '+escapeHtml(x.ticketCode||x.id)+' · '+formatNotificationDate(x.createdAt)+'</p></div><div><strong>'+formatFCFA(x.grossAmount||x.price||0)+'</strong><small>Commission : '+formatFCFA(x.commissionAmount||0)+'</small></div></article>').join('') : '<div class="empty-state">Aucune vente pour le moment.</div>';
+  } catch(error) {
+    console.error(error);
+    if(eventList) eventList.innerHTML='<div class="empty-state error-state">Impossible de charger la console. Vérifiez les droits administrateur Firebase.</div>';
+    if(salesList) salesList.innerHTML='';
+  }
+};
 
 /* ---------------------------------------------------------
    INITIALISATION

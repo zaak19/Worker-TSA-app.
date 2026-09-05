@@ -218,6 +218,7 @@ WorkerTSA.recordTicketSale = async function (eventId, saleData) {
 
         const sale = {
           ticketCode: ticketCode,
+          quantity: 1,
           eventId: eventId,
           organizerId: event.organizerId || null,
           buyerId: buyerId,
@@ -283,9 +284,7 @@ WorkerTSA.saveWithdrawalRequest = async function (uid, withdrawalData) {
 /* ---------------------------------------------------------
    GÉNÉRATION DU TICKET PDF
    ---------------------------------------------------------
-   Placeholder : la génération réelle du PDF (format portrait 9:12,
-   avec nom de l'événement, nom/prénom de l'acheteur et numéro
-   unique à 8 caractères) nécessite une librairie comme jsPDF.
+   La génération réelle du PDF est activée dans app.js avec jsPDF chargé dans index.html.
    Étapes pour l'activer :
    1. Ajouter dans index.html :
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

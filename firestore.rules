@@ -8,6 +8,7 @@ service cloud.firestore {
     function eventExists(eventId) {
       return exists(/databases/$(database)/documents/events/$(eventId));
     }
+    function isAdmin() { return signedIn() && request.auth.token.admin == true; }
     function eventOrganizer(eventId) {
       return get(/databases/$(database)/documents/events/$(eventId)).data.organizerId;
     }
@@ -24,7 +25,7 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
-      allow read: if signedIn();
+      allow read: if signedIn() || isAdmin();
       allow create: if signedIn()
                     && request.resource.data.organizerId == request.auth.uid
                     && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur';
@@ -38,7 +39,8 @@ service cloud.firestore {
       allow create: if signedIn()
                     && request.resource.data.buyerId == request.auth.uid
                     && request.resource.data.count >= 1
-                    && request.resource.data.count <= 5;
+                    && request.resource.data.count <= 5
+                    && request.resource.data.eventId is string;
       allow update: if signedIn()
                     && resource.data.buyerId == request.auth.uid
                     && request.resource.data.buyerId == resource.data.buyerId
@@ -49,9 +51,9 @@ service cloud.firestore {
     }
 
     match /ticketSales/{ticketId} {
-      allow read: if signedIn()
+      allow read: if isAdmin() || (signedIn()
                   && (resource.data.buyerId == request.auth.uid
-                      || resource.data.organizerId == request.auth.uid);
+                      || resource.data.organizerId == request.auth.uid));
       allow create: if signedIn()
                     && request.resource.id == request.resource.data.ticketCode
                     && request.resource.data.buyerId == request.auth.uid
@@ -60,8 +62,22 @@ service cloud.firestore {
                     && eventExists(request.resource.data.eventId)
                     && request.resource.data.organizerId == eventOrganizer(request.resource.data.eventId)
                     && request.resource.data.price > 0
-                    && request.resource.data.status == 'valid';
+                    && request.resource.data.status == 'valid'
+                    && request.resource.data.quantity == 1;
       allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+
+    match /adminAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
     }
 
     match /withdrawals/{withdrawalId} {
