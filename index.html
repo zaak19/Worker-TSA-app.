@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Worker TSA — par Trillion Software</title>
-<link rel="stylesheet" href="styles.css?v=6" />
+<link rel="stylesheet" href="styles.css?v=9" />
 <link rel="icon" href="icon.png" />
 </head>
 <body>
@@ -158,7 +158,7 @@
   </div>
 
   <button class="btn btn-primary" id="btn-profile-continue" disabled onclick="WorkerTSA.confirmProfileType()">Continuer</button>
-  <p class="helper-text center-text" style="margin-top:14px;">Vous pourrez préciser votre profil plus en détail à l'étape suivante.</p>
+  <p class="helper-text center-text" style="margin-top:14px;">Le type de compte choisi ici est définitif. Un compte client/participant ne pourra jamais devenir professionnel.</p>
 </section>
 
 <!-- ============================================================
@@ -580,6 +580,9 @@
   <label class="field-label">Nom de l'événement</label>
   <input type="text" id="ticket-event-name" placeholder="Ex : Festival Musique Lomé 2026" />
 
+  <label class="field-label">Type de ticket</label>
+  <input type="text" id="ticket-type" value="Standard" placeholder="Ex : VIP" />
+
   <label class="field-label">Prix du ticket (FCFA)</label>
   <input type="number" id="ticket-price" placeholder="Ex : 3000" />
 
@@ -638,6 +641,34 @@
 </section>
 
 <!-- ============================================================
+     AJOUTER UN ÉVÉNEMENT — organisateur existant
+     ============================================================ -->
+<section id="screen-new-event" class="screen screen-dashboard">
+  <div class="brand-header">
+    <div class="logo-box"><div class="logo-slot"></div></div>
+    <div class="brand-name">Worker TSA</div>
+    <div class="brand-sub">Nouvel événement</div>
+  </div>
+  <span class="home-kicker">ÉVÉNEMENT <span id="new-event-limit-hint">JUSQU'À 5</span></span>
+  <h1 class="screen-title">Ajouter un événement</h1>
+  <p class="screen-desc">Votre profil organisateur est déjà enregistré. Renseignez uniquement les informations de ce nouvel événement.</p>
+
+  <label class="field-label">Nom de l'événement</label>
+  <input type="text" id="new-event-name" placeholder="Ex : Concert Live Lomé 2026" />
+
+  <label class="field-label">Catégorie</label>
+  <select id="new-event-category"></select>
+
+  <p class="info-card" style="margin-top:16px;">💳 <strong>Frais d'enregistrement : 5 000 FCFA</strong><br><span class="helper-text">Ce paiement est unique pour cet événement. La commission Worker TSA de 5 % s'applique ensuite sur chaque ticket vendu.</span></p>
+  <p class="error-text" id="new-event-error"></p>
+
+  <div class="btn-row">
+    <button class="btn btn-outline" onclick="WorkerTSA.state.addingEvent=false; WorkerTSA.goTo('screen-organizer-dashboard')">Retour</button>
+    <button class="btn btn-primary" onclick="WorkerTSA.prepareAdditionalEvent()">Continuer vers le paiement</button>
+  </div>
+</section>
+
+<!-- ============================================================
      ESPACE VENDEUR — ventes, verrouillage et retraits
      ============================================================ -->
 <section id="screen-organizer-dashboard" class="screen screen-dashboard">
@@ -655,6 +686,10 @@
     <div class="stat-card"><span>Ventes brutes</span><strong id="dashboard-gross-sales">0 FCFA</strong></div>
     <div class="stat-card"><span>Commission 5 %</span><strong id="dashboard-commission">0 FCFA</strong></div>
     <div class="stat-card stat-card-highlight"><span>Fonds disponibles</span><strong id="dashboard-available-funds">0 FCFA</strong></div>
+  </div>
+  <div class="panel-title-row" style="margin:18px 0 12px;align-items:center;">
+    <div><h2 style="margin:0;">Mes événements <span id="dashboard-event-count">0/5</span></h2><p style="margin:4px 0 0;">Vous pouvez enregistrer jusqu'à 5 événements.</p></div>
+    <button class="btn btn-primary" id="btn-add-event" onclick="WorkerTSA.startNewEvent()">+ Ajouter un événement</button>
   </div>
   <div id="dashboard-event-list" class="dashboard-event-list"><div class="empty-state">Chargement de vos événements…</div></div>
   <div id="withdrawal-panel" class="withdrawal-panel hidden">
@@ -679,6 +714,70 @@
 </section>
 
 <!-- ============================================================
+     PROFIL PARTICIPANT — identité du titulaire des tickets
+     ============================================================ -->
+<section id="screen-part-profile" class="screen">
+  <div class="brand-header"><div class="logo-box"><div class="logo-slot"></div></div><div class="brand-name">Worker TSA</div><div class="brand-sub">Profil participant</div></div>
+  <span class="home-kicker">IDENTITÉ DU PARTICIPANT</span>
+  <h1 class="screen-title">Vos informations</h1>
+  <p class="screen-desc">Ces informations apparaîtront sur vos tickets. À l’entrée, présentez le ticket avec votre pièce d’identité.</p>
+  <label class="field-label">Nom</label><input type="text" id="participant-last-name" placeholder="Votre nom" />
+  <label class="field-label">Prénom</label><input type="text" id="participant-first-name" placeholder="Votre prénom" />
+  <div class="info-card"><strong>Important</strong><p>Le ticket est personnel. Le nom et le prénom doivent correspondre à la pièce d’identité présentée à l’entrée.</p></div>
+  <p class="error-text" id="participant-profile-error"></p>
+  <button class="btn btn-primary" onclick="WorkerTSA.saveParticipantIdentity()">Enregistrer et continuer</button>
+</section>
+
+<!-- ============================================================
+     ÉVÉNEMENTS — côté participant
+     ============================================================ -->
+<section id="screen-part-events" class="screen">
+  <div class="dashboard-head"><div><span class="home-kicker">ESPACE PARTICIPANT</span><h1 class="screen-title">Événements</h1><p class="screen-desc">Découvrez les événements disponibles et choisissez votre ticket.</p></div><button class="refresh-btn" onclick="WorkerTSA.openParticipantEvents()" aria-label="Actualiser">↻</button></div>
+  <div id="participant-event-list" class="participant-event-list"></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-part-type')">Retour</button>
+</section>
+
+<!-- ============================================================
+     ACHAT D'UN TICKET — un ticket par opération
+     ============================================================ -->
+<section id="screen-ticket-buy" class="screen">
+  <div class="brand-header"><div class="logo-box"><div class="logo-slot"></div></div><div class="brand-name">Worker TSA</div><div class="brand-sub">Achat de ticket</div></div>
+  <div class="ticket-buy-hero"><span id="buy-event-category">FESTIVAL</span><h1 id="buy-event-name">Événement</h1><p>📅 <span id="buy-event-date">—</span></p><p>📍 <span id="buy-event-place">—</span></p></div>
+  <div class="info-card ticket-buy-summary"><div><span>Type de ticket</span><strong id="buy-ticket-type">Standard</strong></div><div><span>Prix</span><strong id="buy-ticket-price">0 FCFA</strong></div></div>
+  <label class="field-label">Nom du participant</label><input type="text" id="buy-last-name" />
+  <label class="field-label">Prénom du participant</label><input type="text" id="buy-first-name" />
+  <div class="ticket-limit-box"><span>Tickets achetés pour cet événement</span><strong id="buy-limit-count">0/5</strong><small>Maximum 5 tickets avec le même compte</small></div>
+  <p class="error-text" id="buy-ticket-error"></p>
+  <button class="btn btn-primary" id="btn-buy-ticket" onclick="WorkerTSA.buyTicket()">Payer et générer mon ticket</button>
+  <p class="helper-text center-text">Paiement simulé pour le moment. Un numéro de ticket unique de 8 caractères est généré après validation.</p>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-part-events')">Retour aux événements</button>
+</section>
+
+<!-- ============================================================
+     MES TICKETS
+     ============================================================ -->
+<section id="screen-my-tickets" class="screen">
+  <div class="dashboard-head"><div><span class="home-kicker">ESPACE PARTICIPANT</span><h1 class="screen-title">Mes tickets</h1><p class="screen-desc">Retrouvez les tickets achetés avec votre compte.</p></div><button class="refresh-btn" onclick="WorkerTSA.openMyTickets()" aria-label="Actualiser">↻</button></div>
+  <div id="my-ticket-list" class="my-ticket-list"></div>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
+</section>
+
+<!-- ============================================================
+     DÉTAIL DU TICKET — modèle visuel 1, sans QR code
+     ============================================================ -->
+<section id="screen-ticket-detail" class="screen screen-ticket-detail">
+  <div class="dashboard-head"><div><span class="home-kicker">MON TICKET</span><h1 class="screen-title">Mon ticket</h1><p class="screen-desc">Présentez ce ticket avec votre pièce d'identité à l'entrée.</p></div><span class="valid-pill valid-large">✓ Valide</span></div>
+  <article class="ticket-card-main">
+    <div class="ticket-side"><div class="ticket-side-label">TICKET<br>ÉVÉNEMENT</div><div class="ticket-side-mark">🎟</div></div>
+    <div class="ticket-main-top"><span class="ticket-category-pill" id="ticket-detail-category">FESTIVAL</span><h2 id="ticket-detail-event">Full Moon</h2><div class="ticket-meta">📅 <span id="ticket-detail-date">—</span></div><div class="ticket-meta">📍 <strong id="ticket-detail-place">—</strong></div><span class="ticket-valid-stamp">✓ Valide</span></div>
+    <div class="ticket-perforation"></div>
+    <div class="ticket-detail-grid"><div><span>TYPE DE TICKET</span><strong id="ticket-detail-type">Standard</strong></div><div><span>NOM</span><strong id="ticket-detail-last-name">—</strong></div><div><span>PRIX</span><strong id="ticket-detail-price">0 FCFA</strong></div><div><span>PRÉNOM</span><strong id="ticket-detail-first-name">—</strong></div><div><span>N° DE TICKET</span><strong id="ticket-detail-code">XXXXXXXX</strong></div><div><span>ACHETÉ LE</span><strong id="ticket-detail-bought">—</strong></div></div>
+    <div class="ticket-entry-note"><strong>Important</strong><p>Présentez ce ticket et votre pièce d'identité à l'entrée de l'événement.</p><small>Ce ticket ne contient aucun QR code.</small></div>
+  </article>
+  <button class="btn btn-primary" onclick="WorkerTSA.openMyTickets()">Retour à mes tickets</button>
+</section>
+
+<!-- ============================================================
      PARCOURS PARTICIPANT — Choix du type
      ============================================================ -->
 <section id="screen-part-type" class="screen">
@@ -691,7 +790,7 @@
   <h1 class="screen-title">Que recherchez-vous ?</h1>
   <p class="screen-desc">Choisissez ce que vous voulez découvrir sur Worker TSA.</p>
 
-  <div class="radio-card" onclick="WorkerTSA.selectParticipantType('evenement')">
+  <div class="radio-card" onclick="WorkerTSA.openParticipantEvents()">
     <div class="icon-box">🎟</div>
     <div class="content">
       <h3>Un événement</h3>
@@ -741,17 +840,18 @@
     <h1 class="screen-title">Bienvenue sur Worker TSA</h1>
     <p class="screen-desc">Découvrez des événements et des services, ou gérez votre activité professionnelle depuis votre espace.</p>
   </div>
-  <div class="home-actions">
+  <div class="home-role-badge" id="home-role-badge">Client / Participant</div><div class="home-actions">
     <button class="home-action-card" onclick="WorkerTSA.goTo('screen-part-type')">
       <span class="home-action-icon">🎟</span>
       <span><strong>Découvrir</strong><small>Événements et services</small></span>
       <span class="home-arrow">›</span>
     </button>
-    <button class="home-action-card" onclick="WorkerTSA.openOrganizerDashboard()">
+    <button class="home-action-card" id="home-pro-action" onclick="WorkerTSA.openOrganizerDashboard()" style="display:none;">
       <span class="home-action-icon">📊</span>
       <span><strong>Espace vendeur</strong><small>Ventes, fonds et retraits</small></span>
       <span class="home-arrow">›</span>
     </button>
+    <button class="home-action-card" onclick="WorkerTSA.openMyTickets()"><span class="home-action-icon">🎫</span><span><strong>Mes tickets</strong><small>Tickets achetés</small></span><span class="home-arrow">›</span></button>
   </div>
   <p class="home-footer">BY TRILLION SOFTWARE</p>
 </section>
@@ -762,9 +862,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=6"></script>
-<script src="auth.js?v=6"></script>
-<script src="provider.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="firebase-config.js?v=9"></script>
+<script src="auth.js?v=9"></script>
+<script src="provider.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

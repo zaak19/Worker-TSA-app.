@@ -54,13 +54,17 @@ WorkerTSA.computeCommission = function (ticketPrice) {
 };
 
 /* ---------------------------------------------------------
-   NUMÉRO DE TICKET UNIQUE (6 caractères alphanumériques)
+   NUMÉRO DE TICKET UNIQUE (8 caractères alphanumériques)
    --------------------------------------------------------- */
 WorkerTSA.generateTicketNumber = function () {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans caractères ambigus (0/O, 1/I)
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  if (window.crypto && crypto.getRandomValues) {
+    const bytes = new Uint32Array(8);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
+  } else {
+    for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
 };
@@ -116,11 +120,14 @@ WorkerTSA.getEventSalesSummary = async function (eventId, eventData) {
   let gross = Number(data.grossSales || 0);
   let commission = Number(data.totalCommission || 0);
   try {
-    const salesSnap = await db.collection('ticketSales').where('eventId', '==', eventId).get();
+    const salesSnap = data.organizerId
+      ? await db.collection('ticketSales').where('organizerId', '==', data.organizerId).get()
+      : { empty: true, forEach: function () {} };
     if (!salesSnap.empty) {
       sold = 0; gross = 0; commission = 0;
       salesSnap.forEach(function (doc) {
         const sale = doc.data() || {};
+        if (sale.eventId !== eventId) return;
         const qty = Math.max(1, Number(sale.quantity || 1));
         const unitPrice = Number(sale.unitPrice != null ? sale.unitPrice : data.price) || 0;
         const saleGross = Number(sale.grossAmount != null ? sale.grossAmount : unitPrice * qty) || 0;
@@ -148,49 +155,109 @@ WorkerTSA.getEventSalesSummary = async function (eventId, eventData) {
 /* Enregistre une vente et bloque automatiquement toute vente après l'heure
    exacte de l'événement. Cette fonction est prévue pour le futur parcours
    d'achat participant et centralise le calcul de la commission de 5 %. */
+WorkerTSA.MAX_TICKETS_PER_EVENT = 5;
+
+/* ---------------------------------------------------------
+   ACHAT PARTICIPANT — ticket individuel
+   Chaque achat génère un code unique de 8 caractères.
+   Un compteur transactionnel limite le compte à 5 tickets
+   pour un même événement.
+   --------------------------------------------------------- */
+WorkerTSA.getParticipantTickets = async function (uid) {
+  if (!uid) return [];
+  const snap = await db.collection('ticketSales').where('buyerId', '==', uid).get();
+  return snap.docs.map(function (doc) { return { id: doc.id, ...doc.data() }; });
+};
+
+WorkerTSA.getParticipantTicketCount = async function (uid, eventId) {
+  if (!uid || !eventId) return 0;
+  const ref = db.collection('ticketLimits').doc(uid + '_' + eventId);
+  const snap = await ref.get();
+  return snap.exists ? Number((snap.data() || {}).count || 0) : 0;
+};
+
 WorkerTSA.recordTicketSale = async function (eventId, saleData) {
   if (!eventId) return { success: false, error: new Error('Événement manquant.') };
-  try {
-    const eventRef = db.collection('events').doc(eventId);
-    const saleRef = db.collection('ticketSales').doc();
-    const result = await db.runTransaction(async function (transaction) {
-      const eventSnap = await transaction.get(eventRef);
-      if (!eventSnap.exists) throw new Error('Événement introuvable.');
-      const event = eventSnap.data() || {};
-      if (WorkerTSA.isEventSalesLocked(event)) throw new Error('La vente des tickets est verrouillée : l’heure de l’événement est atteinte.');
+  const buyerId = WorkerTSA.state && WorkerTSA.state.currentUserId;
+  if (!buyerId) return { success: false, error: new Error('Connexion participant requise.') };
 
-      const quantity = Math.max(1, Number(saleData && saleData.quantity || 1));
-      const unitPrice = Number(saleData && saleData.unitPrice != null ? saleData.unitPrice : event.price) || 0;
-      const grossAmount = Number(saleData && saleData.grossAmount != null ? saleData.grossAmount : unitPrice * quantity) || 0;
-      const commissionAmount = Math.round(grossAmount * WorkerTSA.TICKET_COMMISSION_RATE);
-      const netAmount = grossAmount - commissionAmount;
+  const payload = saleData || {};
+  const firstName = String(payload.firstName || '').trim();
+  const lastName = String(payload.lastName || '').trim();
+  if (!firstName || !lastName) return { success: false, error: new Error('Nom et prénom du participant requis.') };
 
-      transaction.set(saleRef, {
-        eventId,
-        organizerId: event.organizerId || null,
-        quantity,
-        unitPrice,
-        grossAmount,
-        commissionRate: WorkerTSA.TICKET_COMMISSION_RATE,
-        commissionAmount,
-        netAmount,
-        buyerName: (saleData && saleData.buyerName) || null,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  const eventRef = db.collection('events').doc(eventId);
+  const limitRef = db.collection('ticketLimits').doc(buyerId + '_' + eventId);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const ticketCode = WorkerTSA.generateTicketNumber();
+    const ticketRef = db.collection('ticketSales').doc(ticketCode);
+    try {
+      const result = await db.runTransaction(async function (transaction) {
+        const eventSnap = await transaction.get(eventRef);
+        const limitSnap = await transaction.get(limitRef);
+        const ticketSnap = await transaction.get(ticketRef);
+        if (!eventSnap.exists) throw new Error('Événement introuvable.');
+        if (ticketSnap.exists) throw new Error('CODE_COLLISION');
+
+        const event = eventSnap.data() || {};
+        if (WorkerTSA.isEventSalesLocked(event)) {
+          throw new Error('La vente des tickets est verrouillée : l’heure de l’événement est atteinte.');
+        }
+
+        const currentCount = limitSnap.exists ? Number((limitSnap.data() || {}).count || 0) : 0;
+        if (currentCount >= WorkerTSA.MAX_TICKETS_PER_EVENT) {
+          throw new Error('MAX_TICKETS');
+        }
+
+        const unitPrice = Number(payload.unitPrice != null ? payload.unitPrice : event.price) || 0;
+        if (unitPrice <= 0) throw new Error('Prix du ticket invalide.');
+        const grossAmount = unitPrice;
+        const commissionAmount = Math.round(grossAmount * WorkerTSA.TICKET_COMMISSION_RATE);
+        const netAmount = grossAmount - commissionAmount;
+
+        const sale = {
+          ticketCode: ticketCode,
+          eventId: eventId,
+          organizerId: event.organizerId || null,
+          buyerId: buyerId,
+          firstName: firstName,
+          lastName: lastName,
+          buyerName: firstName + ' ' + lastName,
+          eventName: event.eventName || 'Événement',
+          category: event.category || 'Événement',
+          ticketType: event.ticketType || 'Standard',
+          price: unitPrice,
+          unitPrice: unitPrice,
+          grossAmount: grossAmount,
+          commissionRate: WorkerTSA.TICKET_COMMISSION_RATE,
+          commissionAmount: commissionAmount,
+          netAmount: netAmount,
+          date: event.date || '',
+          time: event.time || '',
+          lieu: event.lieu || '',
+          mapsLink: event.mapsLink || '',
+          status: 'valid',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        transaction.set(ticketRef, sale);
+        transaction.set(limitRef, {
+          buyerId: buyerId,
+          eventId: eventId,
+          count: currentCount + 1,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        return { ticketCode: ticketCode, sale: sale, count: currentCount + 1 };
       });
-
-      transaction.update(eventRef, {
-        ticketsSold: firebase.firestore.FieldValue.increment(quantity),
-        grossSales: firebase.firestore.FieldValue.increment(grossAmount),
-        totalCommission: firebase.firestore.FieldValue.increment(commissionAmount),
-        totalNetSales: firebase.firestore.FieldValue.increment(netAmount)
-      });
-      return { quantity, grossAmount, commissionAmount, netAmount };
-    });
-    return { success: true, sale: result, saleId: saleRef.id };
-  } catch (error) {
-    console.error('Vente de ticket refusée :', error);
-    return { success: false, error };
+      return { success: true, ticket: result.sale, ticketCode: result.ticketCode, count: result.count };
+    } catch (error) {
+      if (error && error.message === 'CODE_COLLISION') continue;
+      return { success: false, error: error };
+    }
   }
+  return { success: false, error: new Error('Impossible de générer un numéro de ticket unique. Réessayez.') };
 };
 
 WorkerTSA.saveWithdrawalRequest = async function (uid, withdrawalData) {
@@ -218,7 +285,7 @@ WorkerTSA.saveWithdrawalRequest = async function (uid, withdrawalData) {
    ---------------------------------------------------------
    Placeholder : la génération réelle du PDF (format portrait 9:12,
    avec nom de l'événement, nom/prénom de l'acheteur et numéro
-   unique à 6 caractères) nécessite une librairie comme jsPDF.
+   unique à 8 caractères) nécessite une librairie comme jsPDF.
    Étapes pour l'activer :
    1. Ajouter dans index.html :
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

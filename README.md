@@ -101,7 +101,7 @@ Pour activer l'envoi réel :
 
 ## 🎟️ Génération des tickets PDF (à activer plus tard)
 
-La génération réelle du PDF de ticket (nom de l'événement, nom/prénom de l'acheteur, numéro unique à 6 caractères, format portrait) nécessite une librairie comme **jsPDF**.
+La génération réelle du PDF de ticket (nom de l'événement, nom/prénom de l'acheteur, numéro unique à 8 caractères alphanumériques, format portrait) nécessite une librairie comme **jsPDF**.
 
 1. Ajoute dans `index.html` :
    ```html
@@ -109,7 +109,7 @@ La génération réelle du PDF de ticket (nom de l'événement, nom/prénom de l
    ```
 2. Implémente `WorkerTSA.generateTicketPDF()` dans `provider.js` (voir commentaires)
 
-Le numéro unique à 6 caractères est déjà généré par `WorkerTSA.generateTicketNumber()`.
+Le numéro unique à 8 caractères alphanumériques est déjà généré par `WorkerTSA.generateTicketNumber()`.
 
 ---
 
@@ -146,3 +146,24 @@ Après une connexion réussie avec l'e-mail et le mot de passe Firebase, l'appli
 - Accueil visuellement plus doux, typographie légèrement agrandie et mention discrète « BY TRILLION SOFTWARE ».
 
 > Remarque : le verrouillage côté interface et `recordTicketSale()` sont des protections côté client. Les règles Firestore doivent aussi interdire les écritures de ventes après l'heure de l'événement et sécuriser les retraits en production.
+
+
+## Version 9 — comptes, tickets participants et identifiants uniques
+
+- Le rôle du compte est choisi à la création : `participant` ou `organisateur`.
+- Le rôle `participant` est considéré comme définitif : l'interface ne propose plus de conversion vers l'espace professionnel.
+- Un compte `organisateur` peut aussi utiliser l'espace participant avec le même compte.
+- L'espace professionnel (`Mes ventes`, retraits, création/gestion d'événements) est protégé côté navigation et doit être protégé côté règles Firebase.
+- Un participant renseigne son nom et son prénom avant son premier achat ; ces informations sont imprimées sur chaque ticket.
+- Chaque achat individuel génère automatiquement un **numéro de ticket de 8 caractères alphanumériques**, différent des autres tickets. Le code est créé au moment de l'achat, pas à la création de l'événement.
+- Le ticket affiché dans l'application reprend le modèle visuel 1 retenu : bordeaux/crème, contours de ticket et perforation, **sans QR code**.
+- Un compte peut acheter au maximum **5 tickets pour un même événement**. Chaque achat est individuel et crée son propre ticket/code.
+- Les tickets achetés sont consultables dans « Mes tickets ».
+
+### Important sur la sécurité
+
+La génération du code et la limite de 5 tickets sont gérées par une transaction Firestore côté client avec un document de compteur. Pour une mise en production avec paiements réels, il faudra déplacer la validation financière et la génération/attribution définitive des tickets dans une fonction backend Firebase (Cloud Functions) afin qu'un client malveillant ne puisse pas fabriquer lui-même une vente valide.
+
+### Règles Firestore v9
+
+Le fichier `firestore.rules` fourni avec cette version est destiné à être copié dans **Firebase Console > Firestore Database > Rules** puis publié. Les règles empêchent notamment les participants de lire les ventes d'autres participants, les organisateurs de lire les tickets d'autres organisateurs et les utilisateurs de modifier/supprimer un ticket après sa création.

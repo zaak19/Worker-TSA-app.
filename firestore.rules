@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function eventExists(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId));
+    }
+    function eventOrganizer(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)).data.organizerId;
+    }
+
+    match /providers/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && request.resource.data.accountRole in ['participant', 'organisateur']
+                    && request.resource.data.profileType == request.resource.data.accountRole;
+      allow update: if isOwner(userId)
+                    && request.resource.data.accountRole == resource.data.accountRole
+                    && request.resource.data.profileType == resource.data.profileType;
+      allow delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.organizerId == request.auth.uid
+                    && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur';
+      allow update, delete: if signedIn()
+                            && resource.data.organizerId == request.auth.uid
+                            && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur';
+    }
+
+    match /ticketLimits/{limitId} {
+      allow read: if signedIn() && resource.data.buyerId == request.auth.uid;
+      allow create: if signedIn()
+                    && request.resource.data.buyerId == request.auth.uid
+                    && request.resource.data.count >= 1
+                    && request.resource.data.count <= 5;
+      allow update: if signedIn()
+                    && resource.data.buyerId == request.auth.uid
+                    && request.resource.data.buyerId == resource.data.buyerId
+                    && request.resource.data.eventId == resource.data.eventId
+                    && request.resource.data.count > resource.data.count
+                    && request.resource.data.count <= 5;
+      allow delete: if false;
+    }
+
+    match /ticketSales/{ticketId} {
+      allow read: if signedIn()
+                  && (resource.data.buyerId == request.auth.uid
+                      || resource.data.organizerId == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.id == request.resource.data.ticketCode
+                    && request.resource.data.buyerId == request.auth.uid
+                    && request.resource.data.quantity == 1
+                    && request.resource.data.eventId is string
+                    && eventExists(request.resource.data.eventId)
+                    && request.resource.data.organizerId == eventOrganizer(request.resource.data.eventId)
+                    && request.resource.data.price > 0
+                    && request.resource.data.status == 'valid';
+      allow update, delete: if false;
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if signedIn() && resource.data.organizerId == request.auth.uid;
+      allow create: if signedIn()
+                    && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur'
+                    && request.resource.data.organizerId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
