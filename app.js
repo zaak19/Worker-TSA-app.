@@ -281,7 +281,12 @@ async function verifyPin() {
 
 function proceedAfterPin() {
   WorkerTSA.pin.unlockMode = false;
-  if (WorkerTSA.state.language) WorkerTSA.goTo('screen-auth');
+  // Si Firebase a déjà restauré une session, ne renvoie pas l'utilisateur
+  // vers l'écran de connexion : affiche directement l'accueil avec les droits.
+  if (auth.currentUser && WorkerTSA.state.currentUserId) {
+    WorkerTSA.refreshHomeRoleUI();
+    WorkerTSA.goTo('screen-home');
+  } else if (WorkerTSA.state.language) WorkerTSA.goTo('screen-auth');
   else WorkerTSA.goTo('screen-language');
 }
 
@@ -464,7 +469,13 @@ WorkerTSA.handleLogin = async function () {
     WorkerTSA.state.currentUserId = cred.user.uid;
     WorkerTSA.state.isAdmin = await WorkerTSA.checkAdminClaim();
     const profile = await WorkerTSA.loadAccountProfile(cred.user.uid);
-    if (profile && profile.accountRole) {
+    if (WorkerTSA.state.isAdmin) {
+      // Un compte administrateur peut être créé uniquement dans Firebase Auth
+      // et n'a donc pas besoin d'un profil providers pour accéder à la console.
+      WorkerTSA.state.profileType = profile && profile.accountRole ? profile.accountRole : null;
+      WorkerTSA.refreshHomeRoleUI();
+      WorkerTSA.goTo('screen-home');
+    } else if (profile && profile.accountRole) {
       WorkerTSA.state.profileType = profile.accountRole;
       WorkerTSA.refreshHomeRoleUI();
       WorkerTSA.goTo('screen-home');
@@ -1408,6 +1419,25 @@ WorkerTSA.loadAdminConsole = async function () {
 document.addEventListener('DOMContentLoaded', function () {
   injectLogos();
   WorkerTSA.refreshHomeRoleUI();
+
+  // Restaurer automatiquement les droits Firebase (y compris admin:true)
+  // lorsqu'une session existe déjà dans le navigateur.
+  auth.onAuthStateChanged(async function (user) {
+    if (!user) {
+      WorkerTSA.state.currentUserId = null;
+      WorkerTSA.state.accountProfile = null;
+      WorkerTSA.state.accountRole = null;
+      WorkerTSA.state.profileType = null;
+      WorkerTSA.state.isAdmin = false;
+      WorkerTSA.refreshHomeRoleUI();
+      return;
+    }
+    WorkerTSA.state.currentUserId = user.uid;
+    WorkerTSA.state.isAdmin = await WorkerTSA.checkAdminClaim();
+    const profile = await WorkerTSA.loadAccountProfile(user.uid);
+    WorkerTSA.state.profileType = profile && profile.accountRole ? profile.accountRole : null;
+    WorkerTSA.refreshHomeRoleUI();
+  });
   renderCategoryOptions('evenement'); // catégories par défaut pour l'écran org-11
   const withdrawEvent = document.getElementById('withdraw-event');
   if (withdrawEvent) withdrawEvent.addEventListener('change', WorkerTSA.updateWithdrawalAvailability);
