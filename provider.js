@@ -237,7 +237,6 @@ WorkerTSA.recordTicketSale = async function (eventId, saleData) {
           date: event.date || '',
           time: event.time || '',
           lieu: event.lieu || '',
-          mapsLink: event.mapsLink || '',
           status: 'valid',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -282,13 +281,9 @@ WorkerTSA.saveWithdrawalRequest = async function (uid, withdrawalData) {
    --------------------------------------------------------- */
 
 /* ---------------------------------------------------------
-   GÉNÉRATION DU TICKET PDF
+   GÉNÉRATION DU TICKET PDF — ACTIVE
    ---------------------------------------------------------
-   La génération réelle du PDF est activée dans app.js avec jsPDF chargé dans index.html.
-   Étapes pour l'activer :
-   1. Ajouter dans index.html :
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-   2. Implémenter WorkerTSA.generateTicketPDF(ticket, buyerName)
-      en utilisant window.jspdf.jsPDF pour dessiner le ticket
-      et déclencher le téléchargement (doc.save('ticket.pdf')).
+   Le ticket PDF est généré dans app.js avec jsPDF chargé
+   dans index.html. La fonction WorkerTSA.downloadTicketPDF()
+   utilise les données du ticket enregistré dans Firestore.
    --------------------------------------------------------- */

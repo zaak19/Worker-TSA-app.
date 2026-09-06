@@ -3,6 +3,10 @@
 
 Application web (PWA-ready) de mise en relation entre organisateurs/prestataires de services et clients/participants, pour le Togo, le Bénin, le Ghana, la Côte d'Ivoire et le Cameroun.
 
+### Version 16 — nouvelle page d'authentification
+
+La page de création de compte et de connexion suit désormais une maquette mobile 9:16 avec arrière-plan blanc, champs blancs à bordure douce et boutons bordeaux. La connexion accessible depuis le parcours professionnel renvoie également vers cette nouvelle page.
+
 ---
 
 ## 📁 Structure du projet
@@ -73,17 +77,18 @@ const firebaseConfig = {
 
 ---
 
-## 🗺️ Google Maps (optionnel, à activer plus tard)
+## 📍 Localisation — choix produit
 
-La sélection de localisation sur carte est désactivée par défaut (les utilisateurs peuvent en attendant coller un lien Google Maps manuellement). Pour l'activer :
+La fonctionnalité de localisation sur carte est définitivement supprimée de Worker TSA.
 
-1. Crée une clé API sur [Google Cloud Console](https://console.cloud.google.com)
-2. Active "Maps JavaScript API" et "Places API"
-3. Renseigne la clé dans `firebase-config.js` (`GOOGLE_MAPS_API_KEY`)
-4. Ajoute le script Google Maps dans `index.html`
-5. Implémente la sélection interactive dans `app.js` (voir commentaires dans le code)
+- Aucun organisateur ou prestataire ne renseigne d'adresse géolocalisée.
+- Aucun lien Google Maps n'est demandé ou enregistré.
+- Aucune sélection sur carte, Google Maps ou Places n'est utilisée.
+- Le profil professionnel utilise uniquement un champ texte **Lieu**.
+- Chaque événement utilise uniquement un champ texte **Lieu**.
+- Le pays reste sélectionnable pendant l'inscription professionnelle ; il sert à identifier le pays choisi et ne constitue pas une géolocalisation.
 
----
+Cette version n'a donc pas besoin de `GOOGLE_MAPS_API_KEY`.
 
 ## 🖼️ Firebase Storage (à activer plus tard)
 
@@ -99,17 +104,23 @@ Pour activer l'envoi réel :
 
 ---
 
-## 🎟️ Génération des tickets PDF (à activer plus tard)
+## 🎟️ Génération des tickets PDF — ACTIVE
 
-La génération réelle du PDF de ticket (nom de l'événement, nom/prénom de l'acheteur, numéro unique à 8 caractères alphanumériques, format portrait) nécessite une librairie comme **jsPDF**.
+La génération du ticket PDF est intégrée à Worker TSA. Après la validation de l'achat, le ticket est enregistré dans Firestore, affiché dans l'espace participant et peut être téléchargé immédiatement en PDF.
 
-1. Ajoute dans `index.html` :
-   ```html
-   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-   ```
-2. Implémente `WorkerTSA.generateTicketPDF()` dans `provider.js` (voir commentaires)
+Le PDF contient notamment :
+- le nom de l'événement ;
+- le nom et le prénom du participant ;
+- la date et l'heure ;
+- le lieu ;
+- le type de ticket ;
+- le prix ;
+- le numéro unique du ticket ;
+- la date d'achat.
 
-Le numéro unique à 8 caractères alphanumériques est déjà généré par `WorkerTSA.generateTicketNumber()`.
+La génération est réalisée côté navigateur avec **jsPDF**. jsPDF est une bibliothèque JavaScript de génération de PDF distribuée sous licence MIT ; elle ne nécessite donc pas de compte Google ni de facturation Google Maps. citeturn0search2
+
+Le numéro unique à 8 caractères alphanumériques est généré par `WorkerTSA.generateTicketNumber()`. Le bouton **Télécharger mon ticket en PDF** est disponible sur l'écran de détail du ticket.
 
 ---
 
@@ -121,9 +132,9 @@ Le numéro unique à 8 caractères alphanumériques est déjà généré par `Wo
 
 ---
 
-## 📱 Paiement (statut actuel)
+## 📱 Paiement et trésorerie (v17)
 
-Aucun paiement réel n'est traité pour le moment. Les écrans de paiement (frais d'enregistrement d'événement ou abonnement prestataire) sont fonctionnels visuellement mais simulent la validation. Moyens de paiement prévus : **T-Money (Mixx by YAS)** et **Moov Money (Flooz)** — Wave, Orange Money et MTN sont affichés comme indisponibles en attendant leur intégration.
+Les écrans de paiement existants restent en mode simulation tant qu'un prestataire de paiement n'a pas fourni ses accès/API. La console admin v17 permet de gérer les moyens de paiement (nom, opérateur, contact/numéro, titulaire, activation/désactivation), les ordres de versement aux organisateurs et les retraits de la part Worker TSA. Les données financières sont contrôlées par les règles Firestore et le custom claim `admin=true`.
 
 ---
 
@@ -141,7 +152,7 @@ Après une connexion réussie avec l'e-mail et le mot de passe Firebase, l'appli
 - Tableau de bord organisateur avec nombre de tickets vendus, ventes brutes, commission Worker TSA de 5 % et fonds disponibles.
 - Verrouillage automatique des ventes à l'heure exacte de début de l'événement.
 - Demande de retrait des fonds après verrouillage, via T-Money ou Moov Money.
-- Les demandes de retrait sont enregistrées dans Firestore (`withdrawals`) avec le statut `pending`. Le versement réel reste à connecter au prestataire Mobile Money.
+- Les demandes de retrait organisateur sont enregistrées dans `withdrawals`. La console admin ajoute aussi `organizerPayouts`, `adminWithdrawals` et `paymentMethods`. Le transfert Mobile Money réel doit être effectué via l'API/compte marchand du prestataire ; aucun secret Mobile Money ne doit être placé dans le JavaScript public.
 - Les ventes futures peuvent être enregistrées dans `ticketSales`; `recordTicketSale()` refuse une vente après l'heure de l'événement et met à jour les compteurs de l'événement.
 - Accueil visuellement plus doux, typographie légèrement agrandie et mention discrète « BY TRILLION SOFTWARE ».
 
@@ -187,3 +198,13 @@ Le fichier `firestore.rules` fourni avec cette version est destiné à être cop
 - Création d'une alerte `adminAlerts` lors d'une vente, sans identité du participant.
 - `WORKER_TSA_SUPPORT_EMAIL` à renseigner dans `firebase-config.js`.
 - Paiements et validation restent simulés dans cette version de test.
+
+
+## 💼 Console financière administrateur — v17
+
+- **Moyens de paiement** : ajout, modification, activation/désactivation et coordonnées de réception.
+- **Versements organisateurs** : création d'un ordre, choix du moyen de paiement, destination, suivi `pending / paid / rejected`.
+- **Retraits Worker TSA** : retrait de la commission disponible, choix du moyen et suivi d'état.
+- **Trésorerie** : calcul de la commission, de la part organisateurs et des montants déjà engagés.
+- Les opérations financières sensibles restent réservées au custom claim Firebase `admin=true`.
+- **Limite importante** : une interface web Firebase ne peut pas envoyer réellement de l'argent par T-Money/Flooz sans l'API ou le service marchand du prestataire. La v17 prépare le contrôle et les ordres de paiement ; la connexion à l'API de paiement devra être faite côté serveur (Cloud Functions/serveur sécurisé), jamais avec une clé secrète dans `app.js`.

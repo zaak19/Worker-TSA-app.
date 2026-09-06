@@ -2,9 +2,11 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#FFFFFF" />
+<meta name="color-scheme" content="light" />
 <title>Worker TSA — par Trillion Software</title>
-<link rel="stylesheet" href="styles.css?v=11" />
+<link rel="stylesheet" href="styles.css?v=16" />
 <link rel="icon" href="icon.png" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -80,51 +82,60 @@
 <!-- ============================================================
      ÉCRAN — CRÉER UN COMPTE / SE CONNECTER
      ============================================================ -->
-<section id="screen-auth" class="screen">
-  <h1 class="screen-title">Créer un compte</h1>
-  <div style="width:40px;height:4px;background:var(--bordeaux);border-radius:4px;margin-bottom:20px;"></div>
+<section id="screen-auth" class="screen screen-auth-modern" aria-label="Créer un compte ou se connecter">
+  <div class="auth-modern-section auth-signup-section">
+    <h1 class="auth-modern-title">Créer un compte</h1>
+    <div class="auth-title-line" aria-hidden="true"></div>
 
-  <label class="field-label">Email</label>
-  <input type="email" id="signup-email" placeholder="Entrez votre email" />
+    <label class="auth-field-label" for="signup-email">Email</label>
+    <input class="auth-input" type="email" id="signup-email" placeholder="Entrez votre email" autocomplete="email" />
 
-  <label class="field-label">Mot de passe</label>
-  <div class="field-with-icon">
-    <input type="password" id="signup-password" placeholder="Entrez votre mot de passe" />
-    <button type="button" class="toggle-eye" onclick="WorkerTSA.togglePassword('signup-password')">👁</button>
+    <label class="auth-field-label" for="signup-password">Mot de passe</label>
+    <div class="auth-input-wrap">
+      <input class="auth-input auth-input-password" type="password" id="signup-password" placeholder="Entrez votre mot de passe" autocomplete="new-password" />
+      <button type="button" class="auth-eye" aria-label="Afficher ou masquer le mot de passe" onclick="WorkerTSA.togglePassword('signup-password')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.1 12s3.4-5.2 9.9-5.2S21.9 12 21.9 12 18.5 17.2 12 17.2 2.1 12 2.1 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+      </button>
+    </div>
+
+    <label class="auth-field-label" for="signup-password-confirm">Confirmer le mot de passe</label>
+    <div class="auth-input-wrap">
+      <input class="auth-input auth-input-password" type="password" id="signup-password-confirm" placeholder="Confirmez votre mot de passe" autocomplete="new-password" />
+      <button type="button" class="auth-eye" aria-label="Afficher ou masquer la confirmation du mot de passe" onclick="WorkerTSA.togglePassword('signup-password-confirm')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.1 12s3.4-5.2 9.9-5.2S21.9 12 21.9 12 18.5 17.2 12 17.2 2.1 12 2.1 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+      </button>
+    </div>
+    <p class="error-text auth-error" id="signup-error"></p>
+
+    <button class="btn auth-modern-button" type="button" onclick="WorkerTSA.handleSignup()">Créer un compte</button>
   </div>
 
-  <label class="field-label">Confirmer le mot de passe</label>
-  <div class="field-with-icon">
-    <input type="password" id="signup-password-confirm" placeholder="Confirmez votre mot de passe" />
-    <button type="button" class="toggle-eye" onclick="WorkerTSA.togglePassword('signup-password-confirm')">👁</button>
+  <div class="auth-divider" aria-hidden="true">
+    <span></span><strong>OU</strong><span></span>
   </div>
-  <p class="error-text" id="signup-error"></p>
 
-  <button class="btn btn-primary" onclick="WorkerTSA.handleSignup()">Créer un compte</button>
+  <div class="auth-modern-section auth-login-section">
+    <h1 class="auth-modern-title">Se connecter</h1>
+    <div class="auth-title-line" aria-hidden="true"></div>
 
-  <div class="divider">OU</div>
+    <label class="auth-field-label" for="login-email">Email</label>
+    <input class="auth-input" type="email" id="login-email" placeholder="Entrez votre email" autocomplete="username" />
 
-  <h1 class="screen-title">Se connecter</h1>
-  <div style="width:40px;height:4px;background:var(--bordeaux);border-radius:4px;margin-bottom:20px;"></div>
+    <label class="auth-field-label" for="login-password">Mot de passe</label>
+    <div class="auth-input-wrap">
+      <input class="auth-input auth-input-password" type="password" id="login-password" placeholder="Entrez votre mot de passe" autocomplete="current-password" />
+      <button type="button" class="auth-eye" aria-label="Afficher ou masquer le mot de passe" onclick="WorkerTSA.togglePassword('login-password')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.1 12s3.4-5.2 9.9-5.2S21.9 12 21.9 12 18.5 17.2 12 17.2 2.1 12 2.1 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+      </button>
+    </div>
 
-  <label class="field-label">Email</label>
-  <input type="email" id="login-email" placeholder="Entrez votre email" />
+    <p class="auth-forgot"><button class="btn-link auth-forgot-link" type="button" onclick="WorkerTSA.handleForgotPassword()">Mot de passe oublié ?</button></p>
+    <p class="error-text auth-error" id="login-error"></p>
 
-  <label class="field-label">Mot de passe</label>
-  <div class="field-with-icon">
-    <input type="password" id="login-password" placeholder="Entrez votre mot de passe" />
-    <button type="button" class="toggle-eye" onclick="WorkerTSA.togglePassword('login-password')">👁</button>
+    <button class="btn auth-modern-button" type="button" onclick="WorkerTSA.handleLogin()">Se connecter</button>
   </div>
-  <p style="text-align:right;margin:-8px 0 16px;">
-    <button class="btn-link" style="font-size:0.85rem;" onclick="WorkerTSA.handleForgotPassword()">Mot de passe oublié ?</button>
-  </p>
-  <p class="error-text" id="login-error"></p>
 
-  <button class="btn btn-primary" onclick="WorkerTSA.handleLogin()">Se connecter</button>
-
-  <p class="center-text" style="margin-top:24px;font-size:0.8rem;color:var(--text-placeholder);letter-spacing:2px;">
-    — BY TRILLION SOFTWARE —
-  </p>
+  <p class="auth-footer">— &nbsp; BY TRILLION SOFTWARE &nbsp; —</p>
 </section>
 
 <!-- ============================================================
@@ -186,7 +197,7 @@
 </section>
 
 <!-- ============================================================
-     PARCOURS ORGANISATEUR — ÉTAPE 1/11 : Compte pro
+     PARCOURS ORGANISATEUR — ÉTAPE 1/10 : Compte pro
      ============================================================ -->
 <section id="screen-org-1" class="screen">
   <div class="brand-header">
@@ -194,7 +205,7 @@
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:9%;"></div></div>
-  <div class="step-label">Étape 1 sur 11</div>
+  <div class="step-label">Étape 1 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Créer votre compte professionnel</h1>
@@ -217,7 +228,7 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 2/11 : Pays
+     ÉTAPE 2/10 : Pays
      ============================================================ -->
 <section id="screen-org-2" class="screen" style="background:#0d0d0d;color:#fff;">
   <div class="brand-header">
@@ -226,7 +237,7 @@
     <div class="brand-sub" style="color:#c9a3a7;">TRILLION SOFTWARE</div>
   </div>
   <div class="progress-track" style="background:#3a1a1f;"><div class="progress-fill" style="width:18%;"></div></div>
-  <div class="step-label" style="color:#e8dcdc;">Étape 2 sur 11</div>
+  <div class="step-label" style="color:#e8dcdc;">Étape 2 sur 10</div>
 
   <h1 class="screen-title" style="color:#fff;">Sélectionnez votre pays</h1>
   <p class="screen-desc" style="color:#c9b3b3;">Choisissez le pays dans lequel vous proposez votre service ou votre événement.</p>
@@ -241,7 +252,7 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 3/11 : Photo de profil
+     ÉTAPE 3/10 : Photo de profil
      ============================================================ -->
 <section id="screen-org-3" class="screen">
   <div class="brand-header">
@@ -249,7 +260,7 @@
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:27%;"></div></div>
-  <div class="step-label">Étape 3 sur 11</div>
+  <div class="step-label">Étape 3 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Votre profil professionnel</h1>
@@ -271,7 +282,7 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 4/11 : Photos de présentation
+     ÉTAPE 4/10 : Photos de présentation
      ============================================================ -->
 <section id="screen-org-4" class="screen">
   <div class="brand-header">
@@ -279,7 +290,7 @@
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:36%;"></div></div>
-  <div class="step-label">Étape 4 sur 11</div>
+  <div class="step-label">Étape 4 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Photos de présentation</h1>
@@ -303,7 +314,7 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 5/11 : Coordonnées
+     ÉTAPE 5/10 : Coordonnées
      ============================================================ -->
 <section id="screen-org-5" class="screen">
   <div class="brand-header">
@@ -311,7 +322,7 @@
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:45%;"></div></div>
-  <div class="step-label">Étape 5 sur 11</div>
+  <div class="step-label">Étape 5 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Vos coordonnées</h1>
@@ -331,51 +342,15 @@
 </section>
 
 <!-- ============================================================
-     ÉTAPE 6/11 : Localisation
+     ÉTAPE 6/10 : Récapitulatif
      ============================================================ -->
 <section id="screen-org-6" class="screen">
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
   </div>
-  <div class="progress-track"><div class="progress-fill" style="width:54%;"></div></div>
-  <div class="step-label">Étape 6 sur 11</div>
-  <div class="badge">Organisateur ou prestataire de services</div>
-
-  <h1 class="screen-title">Localisation</h1>
-  <p class="screen-desc">Indiquez où vous exercez votre activité.</p>
-
-  <label class="field-label">Ville</label>
-  <input type="text" id="org-city" placeholder="Lomé" />
-
-  <label class="field-label">Pays</label>
-  <input type="text" id="org-country" placeholder="Togo" readonly />
-
-  <label class="field-label">Adresse précise</label>
-  <input type="text" id="org-address" placeholder="Quartier, rue, point de repère..." />
-
-  <label class="field-label">Lien Google Maps (optionnel)</label>
-  <input type="url" id="org-maps-link" placeholder="https://maps.google.com/..." />
-
-  <button class="btn btn-outline" style="border-style:dashed;margin-bottom:16px;" disabled>📍 Sélectionner sur la carte</button>
-  <p class="helper-text">La sélection sur carte sera activée dès qu'une clé Google Maps API officielle sera configurée dans <code>provider.js</code> (voir commentaire <code>GOOGLE_MAPS_API_KEY</code>). En attendant, utilisez l'adresse ou le lien Google Maps ci-dessus.</p>
-
-  <div class="btn-row">
-    <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-5')">Retour</button>
-    <button class="btn btn-primary" onclick="WorkerTSA.orgStep6Next()">Continuer</button>
-  </div>
-</section>
-
-<!-- ============================================================
-     ÉTAPE 7/11 : Récapitulatif
-     ============================================================ -->
-<section id="screen-org-7" class="screen">
-  <div class="brand-header">
-    <div class="logo-box"><div class="logo-slot"></div></div>
-    <div class="brand-name">Worker TSA</div>
-  </div>
-  <div class="progress-track"><div class="progress-fill" style="width:63%;"></div></div>
-  <div class="step-label">Étape 7 sur 11</div>
+  <div class="progress-track"><div class="progress-fill" style="width:60%;"></div></div>
+  <div class="step-label">Étape 6 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Récapitulatif</h1>
@@ -385,20 +360,20 @@
 
   <div class="btn-row">
     <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-1')">Modifier</button>
-    <button class="btn btn-primary" onclick="WorkerTSA.goTo('screen-org-8')">Continuer</button>
+    <button class="btn btn-primary" onclick="WorkerTSA.goTo('screen-org-7')">Continuer</button>
   </div>
 </section>
 
 <!-- ============================================================
-     ÉTAPE 8/11 : Type d'activité et tarification
+     ÉTAPE 7/10 : Type d'activité et tarification
      ============================================================ -->
-<section id="screen-org-8" class="screen">
+<section id="screen-org-7" class="screen">
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
   </div>
-  <div class="progress-track"><div class="progress-fill" style="width:72%;"></div></div>
-  <div class="step-label">Étape 8 sur 11</div>
+  <div class="progress-track"><div class="progress-fill" style="width:70%;"></div></div>
+  <div class="step-label">Étape 7 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Que proposez-vous ?</h1>
@@ -442,20 +417,20 @@
   </div>
 
   <div class="btn-row">
-    <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-7')">Retour</button>
+    <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-6')">Retour</button>
     <button class="btn btn-primary" id="btn-billing-type-continue" disabled onclick="WorkerTSA.continueBillingChoice()">Continuer</button>
   </div>
 </section>
 
 <!-- ============================================================
-     ÉTAPE 9/11 : Paiement
+     ÉTAPE 8/10 : Paiement
      ============================================================ -->
-<section id="screen-org-9" class="screen">
+<section id="screen-org-8" class="screen">
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
   </div>
-  <div class="step-label">Étape 9 sur 11</div>
+  <div class="step-label">Étape 8 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Paiement</h1>
@@ -488,19 +463,19 @@
 
   <button class="btn btn-primary" id="btn-pay-now" disabled onclick="WorkerTSA.processPayment()">Payer maintenant</button>
   <p class="helper-text center-text" id="billing-payment-note">Le paiement réel sera activé une fois les moyens de paiement intégrés.</p>
-  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-8')">Retour</button>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-7')">Retour</button>
 </section>
 
 <!-- ============================================================
-     ÉTAPE 10/11 : Confirmation paiement
+     ÉTAPE 9/10 : Confirmation paiement
      ============================================================ -->
-<section id="screen-org-10" class="screen">
+<section id="screen-org-9" class="screen">
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:90%;"></div></div>
-  <div class="step-label">Étape 10 sur 11</div>
+  <div class="step-label">Étape 9 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <div class="status-icon-circle success">✓</div>
@@ -516,19 +491,19 @@
 
   <p class="helper-text center-text">Un e-mail de confirmation vous a été envoyé. Votre profil sera examiné avant validation finale.</p>
 
-  <button class="btn btn-primary" onclick="WorkerTSA.setActivityType(WorkerTSA.state.activityType || 'evenement'); WorkerTSA.goTo('screen-org-11')">Continuer</button>
+  <button class="btn btn-primary" onclick="WorkerTSA.setActivityType(WorkerTSA.state.activityType || 'evenement'); WorkerTSA.goTo('screen-org-10')">Continuer</button>
 </section>
 
 <!-- ============================================================
-     ÉTAPE 11/11 : Profil principal
+     ÉTAPE 10/10 : Profil principal
      ============================================================ -->
-<section id="screen-org-11" class="screen">
+<section id="screen-org-10" class="screen">
   <div class="brand-header">
     <div class="logo-box"><div class="logo-slot"></div></div>
     <div class="brand-name">Worker TSA</div>
   </div>
   <div class="progress-track"><div class="progress-fill" style="width:100%;"></div></div>
-  <div class="step-label">Étape 11 sur 11</div>
+  <div class="step-label">Étape 10 sur 10</div>
   <div class="badge">Organisateur ou prestataire de services</div>
 
   <h1 class="screen-title">Votre profil principal</h1>
@@ -585,7 +560,7 @@
     <input type="file" accept="image/*" id="id-selfie-input" class="hidden" onchange="WorkerTSA.markUploaded(this, 'id-selfie-label', 'Selfie ajouté ✓')" />
   </div>
 
-  <p class="error-text" id="org-11-error"></p>
+  <p class="error-text" id="org-10-error"></p>
   <button class="btn btn-primary" onclick="WorkerTSA.validateMainProfile()">Valider mon profil</button>
 </section>
 
@@ -625,8 +600,6 @@
   <label class="field-label">Lieu</label>
   <input type="text" id="ticket-lieu" placeholder="Ex : Stade de Kégué, Lomé" />
 
-  <label class="field-label">Localisation précise (lien Google Maps)</label>
-  <input type="url" id="ticket-maps-link" placeholder="Collez votre lien Google Maps ici" />
 
   <div class="commission-notice">
     <span>Commission Worker TSA</span>
@@ -665,7 +638,7 @@
   <button class="btn btn-outline" onclick="WorkerTSA.simulateEventApproval()">✓ Simuler la validation de mon événement</button>
   <p class="helper-text center-text">MODE TEST : en production, cette validation sera effectuée par l'équipe Worker TSA après vérification.</p>
   <div style="height:10px;"></div>
-  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-11')">Modifier mon profil</button>
+  <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-org-10')">Modifier mon profil</button>
 </section>
 
 <!-- ============================================================
@@ -776,7 +749,7 @@
   <label class="field-label">Prénom du participant</label><input type="text" id="buy-first-name" />
   <div class="ticket-limit-box"><span>Tickets achetés pour cet événement</span><strong id="buy-limit-count">0/5</strong><small>Maximum 5 tickets avec le même compte</small></div>
   <p class="error-text" id="buy-ticket-error"></p>
-  <button class="btn btn-primary" id="btn-buy-ticket" onclick="WorkerTSA.buyTicket()">Payer et générer mon ticket</button>
+  <button class="btn btn-primary" id="btn-buy-ticket" onclick="WorkerTSA.buyTicket()">Payer et obtenir mon ticket</button>
   <p class="helper-text center-text">Paiement simulé pour le moment. Un numéro de ticket unique de 8 caractères est généré après validation.</p>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-part-events')">Retour aux événements</button>
 </section>
@@ -788,7 +761,7 @@
   <div class="brand-header"><div class="logo-box"><div class="logo-slot"></div></div><div class="brand-name">Worker TSA</div><div class="brand-sub">Validation du paiement</div></div>
   <span class="home-kicker">PAIEMENT DU TICKET</span>
   <h1 class="screen-title">Confirmer mon achat</h1>
-  <p class="screen-desc">Dans cette version de test, le paiement est simulé. Après validation, Worker TSA génère immédiatement votre ticket unique.</p>
+  <p class="screen-desc">Dans cette version de test, le paiement est simulé. Après validation, Worker TSA génère immédiatement votre ticket unique et le rend disponible en PDF.</p>
   <div class="info-card payment-confirm-card"><div><span>Événement</span><strong id="payment-event-name">—</strong></div><div><span>Participant</span><strong id="payment-buyer-name">—</strong></div><div><span>Montant</span><strong id="payment-ticket-price">0 FCFA</strong></div><div><span>Tickets pour cet événement</span><strong id="payment-limit-count">0/5</strong></div></div>
   <div class="notification-card"><div class="notification-channel">✉ CONFIRMATION SIMULÉE</div><h2>Après validation</h2><p>Vous recevrez une confirmation dans l'application et une notification e-mail simulée. Votre ticket sera disponible immédiatement dans « Mes tickets » et pourra être téléchargé en PDF.</p></div>
   <p class="error-text" id="ticket-payment-error"></p>
@@ -904,6 +877,58 @@
     <div class="panel-title-row"><div><h2>Dernières ventes</h2><p>Vue financière et opérationnelle sans afficher les noms/prénoms des participants.</p></div></div>
     <div id="admin-sales-list" class="dashboard-event-list"></div>
   </div>
+  <div class="admin-panel admin-finance-panel">
+    <div class="panel-title-row"><div><h2>💳 Moyens de paiement</h2><p>Ajoutez, activez, désactivez ou modifiez les coordonnées utilisées par Worker TSA.</p></div></div>
+    <div id="admin-payment-methods" class="dashboard-event-list"></div>
+    <form id="admin-payment-method-form" class="admin-form" onsubmit="return WorkerTSA.saveAdminPaymentMethod(event)">
+      <input type="hidden" id="admin-payment-method-id" />
+      <label>Nom du moyen</label><input id="admin-payment-method-name" required placeholder="T-Money / Moov Money" />
+      <label>Type</label><select id="admin-payment-method-provider"><option value="T-Money">T-Money</option><option value="Moov Money">Moov Money</option><option value="Autre">Autre</option></select>
+      <label>Numéro / contact / adresse de réception</label><input id="admin-payment-method-contact" required placeholder="+228 XX XX XX XX" />
+      <label>Nom du titulaire / compte</label><input id="admin-payment-method-holder" placeholder="Trillion Software" />
+      <label>Note interne</label><input id="admin-payment-method-note" placeholder="Compte principal, secondaire…" />
+      <div class="admin-form-actions"><button class="btn btn-primary" type="submit">Enregistrer</button><button class="btn btn-outline" type="button" onclick="WorkerTSA.resetAdminPaymentMethodForm()">Annuler</button></div>
+    </form>
+  </div>
+
+  <div class="admin-panel admin-finance-panel">
+    <div class="panel-title-row"><div><h2>💰 Trésorerie Worker TSA</h2><p>Vue calculée à partir des ventes enregistrées et des sorties validées.</p></div></div>
+    <div class="finance-balance-grid">
+      <div class="stat-card"><span>Commission disponible</span><strong id="admin-available-commission">0 FCFA</strong></div>
+      <div class="stat-card"><span>À reverser aux organisateurs</span><strong id="admin-organizer-payable">0 FCFA</strong></div>
+    </div>
+    <div class="admin-form-actions"><button class="btn btn-primary" type="button" onclick="WorkerTSA.openAdminOrganizerPayout()">Envoyer la part d’un organisateur</button><button class="btn btn-outline" type="button" onclick="WorkerTSA.openAdminWithdrawal()">Retirer la part Worker TSA</button></div>
+    <p class="dashboard-note"><strong>Important :</strong> cette console prépare et sécurise les ordres de paiement. Le transfert Mobile Money réel nécessite l’API/compte marchand du prestataire ; les secrets de paiement ne doivent jamais être stockés dans le navigateur.</p>
+  </div>
+
+  <div class="admin-panel admin-finance-panel">
+    <div class="panel-title-row"><div><h2>📤 Versement organisateur</h2><p>Créez un ordre de versement vers un organisateur.</p></div></div>
+    <div class="admin-form">
+      <select id="admin-payout-organizer"><option value="">Choisir un organisateur</option></select>
+      <select id="admin-payout-event"><option value="">Choisir un événement</option></select>
+      <input type="number" id="admin-payout-amount" min="1" step="1" placeholder="Montant en FCFA" />
+      <select id="admin-payout-method"><option value="">Choisir le moyen de paiement</option></select>
+      <input id="admin-payout-destination" placeholder="Numéro / compte bénéficiaire" />
+      <input id="admin-payout-note" placeholder="Note / référence du versement" />
+      <button class="btn btn-primary" type="button" onclick="WorkerTSA.createOrganizerPayout()">Créer l’ordre de versement</button>
+      <p class="error-text" id="admin-payout-error"></p>
+    </div>
+    <div id="admin-payout-list" class="dashboard-event-list"></div>
+  </div>
+
+  <div class="admin-panel admin-finance-panel">
+    <div class="panel-title-row"><div><h2>🏦 Retrait Worker TSA</h2><p>Retirez la commission disponible vers un moyen de paiement configuré.</p></div></div>
+    <div class="admin-form">
+      <input type="number" id="admin-withdraw-amount" min="1" step="1" placeholder="Montant en FCFA" />
+      <select id="admin-withdraw-method"><option value="">Choisir le moyen de paiement</option></select>
+      <input id="admin-withdraw-destination" placeholder="Numéro / compte de réception" />
+      <input id="admin-withdraw-note" placeholder="Note / référence" />
+      <button class="btn btn-primary" type="button" onclick="WorkerTSA.createAdminWithdrawal()">Créer le retrait</button>
+      <p class="error-text" id="admin-withdraw-error"></p>
+    </div>
+    <div id="admin-withdrawal-list" class="dashboard-event-list"></div>
+  </div>
+
   <div class="admin-panel">
     <div class="panel-title-row"><div><h2>Assistance</h2><p>E-mail professionnel Worker TSA à renseigner dans <code>firebase-config.js</code>.</p></div></div>
     <p class="info-card"><strong id="admin-support-email">E-mail d’assistance non configuré</strong></p>
