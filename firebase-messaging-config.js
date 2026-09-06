@@ -5,4 +5,4 @@
  * remplacez la valeur ci-dessous par la CLÉ PUBLIQUE VAPID.
  * Ne mettez JAMAIS la clé privée VAPID dans ce fichier.
  */
-const WORKER_TSA_VAPID_KEY = 'A_REMPLACER_PAR_LA_CLE_PUBLIQUE_VAPID';
+const WORKER_TSA_VAPID_KEY = 'BFch2p4mtpxRmrL3kZRzW9yIiEHKdLmXnaif2S20hqcAl7PsatllFDFwYfFLC1MZSLbbVpOnrzhNOeeHZ4OI1Ac';
