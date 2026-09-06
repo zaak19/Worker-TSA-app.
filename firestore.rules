@@ -40,7 +40,13 @@ service cloud.firestore {
     }
 
     match /ticketLimits/{limitId} {
-      allow read: if signedIn() && resource.data.buyerId == request.auth.uid;
+      // Le document n'existe pas encore lors du premier achat :
+      // resource.data est alors absent, donc il faut autoriser la lecture
+      // en vérifiant l'identifiant acheteur encodé dans l'ID du document.
+      allow read: if signedIn() && (
+        resource.data.buyerId == request.auth.uid
+        || limitId.matches('^' + request.auth.uid + '_.*$')
+      );
       allow create: if signedIn()
                     && request.resource.data.buyerId == request.auth.uid
                     && request.resource.data.count >= 1
