@@ -208,3 +208,21 @@ Le fichier `firestore.rules` fourni avec cette version est destiné à être cop
 - **Trésorerie** : calcul de la commission, de la part organisateurs et des montants déjà engagés.
 - Les opérations financières sensibles restent réservées au custom claim Firebase `admin=true`.
 - **Limite importante** : une interface web Firebase ne peut pas envoyer réellement de l'argent par T-Money/Flooz sans l'API ou le service marchand du prestataire. La v17 prépare le contrôle et les ordres de paiement ; la connexion à l'API de paiement devra être faite côté serveur (Cloud Functions/serveur sécurisé), jamais avec une clé secrète dans `app.js`.
+
+## 🔔 Notifications push et retraits organisateurs — V18
+
+- Worker TSA utilise Firebase Cloud Messaging (FCM) pour les notifications push Web.
+- Une vente de ticket crée automatiquement une notification pour l'organisateur via le backend Firebase.
+- Les notifications Firestore peuvent être transformées en notifications push sur le téléphone si l'organisateur a autorisé les notifications et enregistré son appareil.
+- La clé publique VAPID doit être renseignée dans `firebase-messaging-config.js`.
+- Le service worker `firebase-messaging-sw.js` doit rester à la racine du domaine HTTPS.
+- Les demandes de retrait organisateur passent par `pending` → `processing` → `paid`/`rejected` et affichent un délai cible de 2 à 3 heures.
+- Le transfert Mobile Money réel nécessite toujours l'API/compte marchand du prestataire ; la console admin ne stocke aucun secret de paiement dans le navigateur.
+- Les fonctions backend sont dans `functions/` et doivent être déployées avec Firebase CLI.
+
+
+## V19 — Splash et code de sécurité
+
+- Le splash utilise la maquette mobile 9:16 fournie pour Worker TSA.
+- L’écran de création/déverrouillage du code de sécurité reprend la maquette vitrée avec fond paysage, tout en conservant le clavier PIN interactif et le stockage local sécurisé du code.
+- Le fonctionnement Firebase Auth et les autres écrans de l’application restent inchangés.

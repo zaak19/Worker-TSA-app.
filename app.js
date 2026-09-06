@@ -390,6 +390,7 @@ WorkerTSA.handleDirectLogin = async function () {
     const profile = await WorkerTSA.loadAccountProfile(cred.user.uid);
     WorkerTSA.state.profileType = profile && profile.accountRole ? profile.accountRole : null;
     WorkerTSA.refreshHomeRoleUI();
+    if (WorkerTSA.state.profileType === 'organisateur') WorkerTSA.registerPushForCurrentUser().catch(function(){});
     WorkerTSA.goTo('screen-home');
   } catch (err) { showError(errorEl, translateFirebaseError(err)); }
 };
@@ -981,6 +982,67 @@ WorkerTSA.simulateEventApproval = async function () {
   }
 };
 
+/* ---------------------------------------------------------
+   NOTIFICATIONS PUSH — Firebase Cloud Messaging (Web)
+   --------------------------------------------------------- */
+WorkerTSA.pushSupported = function () {
+  return typeof firebase !== 'undefined' && firebase.messaging && typeof Notification !== 'undefined' && 'serviceWorker' in navigator;
+};
+
+WorkerTSA.registerPushForCurrentUser = async function () {
+  if (!WorkerTSA.state.currentUserId || !WorkerTSA.pushSupported()) return { success:false, reason:'unsupported' };
+  const vapid = (typeof WORKER_TSA_VAPID_KEY === 'string') ? WORKER_TSA_VAPID_KEY.trim() : '';
+  if (!vapid || vapid.indexOf('A_REMPLACER_') === 0) return { success:false, reason:'vapid_missing' };
+  try {
+    const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (permission !== 'granted') return { success:false, reason:'permission_denied' };
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: vapid, serviceWorkerRegistration: registration });
+    if (!token) return { success:false, reason:'token_missing' };
+    await db.collection('notificationTokens').doc(WorkerTSA.state.currentUserId).set({
+      token: token,
+      platform: 'web',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge:true });
+    WorkerTSA.state.pushEnabled = true;
+    return { success:true };
+  } catch (error) {
+    console.warn('Notifications push Worker TSA:', error);
+    return { success:false, error:error };
+  }
+};
+
+WorkerTSA.enablePushNotifications = async function () {
+  const result = await WorkerTSA.registerPushForCurrentUser();
+  if (result.success) {
+    alert('Notifications activées sur ce téléphone.');
+  } else if (result.reason === 'vapid_missing') {
+    alert('La clé Web Push VAPID doit d’abord être renseignée dans firebase-messaging-config.js.');
+  } else if (result.reason === 'permission_denied') {
+    alert('Les notifications sont bloquées. Autorisez les notifications pour Worker TSA dans les réglages du navigateur/téléphone.');
+  } else if (result.reason === 'unsupported') {
+    alert('Les notifications push ne sont pas disponibles dans ce navigateur.');
+  } else {
+    alert('Impossible d’activer les notifications pour le moment.');
+  }
+};
+
+WorkerTSA.loadOrganizerWithdrawalHistory = async function () {
+  const list = document.getElementById('organizer-withdrawal-history');
+  if (!list || !WorkerTSA.state.currentUserId) return;
+  try {
+    const snap = await db.collection('withdrawals').where('organizerId','==',WorkerTSA.state.currentUserId).get();
+    const rows = snap.docs.map(function(d){return {id:d.id,...d.data()};}).sort(function(a,b){
+      const ad=a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0, bd=b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0; return bd-ad;
+    });
+    list.innerHTML = rows.length ? '<div class="panel-title-row"><div><h2>Historique des retraits</h2></div></div>' + rows.map(function(w){
+      const label = w.status==='paid'?'Effectué':(w.status==='processing'?'En traitement':(w.status==='rejected'?'Refusé':'En attente'));
+      return '<article class="dashboard-event-card"><div><span class="home-kicker">RETRAIT</span><h3>'+escapeHtml(w.eventName||'Événement')+'</h3><p>'+formatFCFA(w.amount||0)+' · '+escapeHtml(w.paymentMethod||'')+'</p><small>Demandé : '+formatNotificationDate(w.createdAt)+'</small></div><div><strong>'+escapeHtml(label)+'</strong><small>Délai cible : 2–3 h</small></div></article>';
+    }).join('') : '';
+  } catch(error) { console.warn('Historique retraits:', error); }
+};
+
 WorkerTSA.openNotifications = async function () {
   if (!WorkerTSA.state.currentUserId) { WorkerTSA.goTo('screen-auth'); return; }
   WorkerTSA.goTo('screen-notifications');
@@ -1103,6 +1165,8 @@ WorkerTSA.loadOrganizerDashboard = async function () {
       return '<article class="seller-event-card"><div class="seller-event-top"><div><span class="seller-event-category">'+(e.category||'Événement')+'</span><h2>'+(e.eventName||'Événement')+'</h2><p>'+formatEventDate(e.date,e.time)+' · '+(e.lieu||'')+'</p></div><span class="sales-status '+(s.locked?'locked':'open')+'">'+(s.locked?'Ventes verrouillées':'Ventes ouvertes')+'</span></div><div class="seller-event-metrics"><div><span>Tickets</span><strong>'+s.sold.toLocaleString('fr-FR')+'</strong></div><div><span>Brut</span><strong>'+formatFCFA(s.gross)+'</strong></div><div><span>Commission</span><strong>'+formatFCFA(s.commission)+'</strong></div><div><span>Net</span><strong>'+formatFCFA(s.net)+'</strong></div></div>'+(s.locked?'<button class="btn btn-primary seller-withdraw-btn" onclick="WorkerTSA.prepareWithdrawal(\''+e.id+'\')">Retirer les fonds</button>':'<p class="seller-lock-note">La vente reste ouverte jusqu’à l’heure exacte de l’événement.</p>')+'</article>';
     }).join('');
     WorkerTSA.refreshWithdrawalOptions();
+    await WorkerTSA.loadOrganizerWithdrawalHistory();
+    WorkerTSA.registerPushForCurrentUser().catch(function(){});
   } catch(error) { console.error(error); list.innerHTML='<div class="empty-state error-state">Impossible de charger vos ventes. Vérifiez votre connexion puis actualisez.</div>'; }
 };
 WorkerTSA.refreshWithdrawalOptions = function(){
@@ -1131,9 +1195,11 @@ WorkerTSA.requestWithdrawal=async function(){
   if(!WorkerTSA.state.organizerDashboard.withdrawalMethod)return showError(errorEl,'Choisissez un moyen de retrait.');
   if(!amount||amount<=0||amount>item.summary.net)return showError(errorEl,'Le montant demandé dépasse les fonds disponibles.');
   if(!phone)return showError(errorEl,'Renseignez le numéro qui recevra le retrait.');
-  const result=await WorkerTSA.saveWithdrawalRequest(WorkerTSA.state.currentUserId,{eventId:item.event.id,eventName:item.event.eventName||'Événement',amount,paymentMethod:WorkerTSA.state.organizerDashboard.withdrawalMethod,payoutPhone:phone,availableAtRequest:item.summary.net});
+  const targetPayoutAt = new Date(Date.now() + 3*60*60*1000);
+  const result=await WorkerTSA.saveWithdrawalRequest(WorkerTSA.state.currentUserId,{eventId:item.event.id,eventName:item.event.eventName||'Événement',amount,paymentMethod:WorkerTSA.state.organizerDashboard.withdrawalMethod,payoutPhone:phone,availableAtRequest:item.summary.net,targetPayoutAt:targetPayoutAt,processingWindow:'2-3h'});
   if(!result.success)return showError(errorEl,'Impossible d’enregistrer la demande de retrait.');
-  alert('Votre demande de retrait a été enregistrée. Le versement réel sera effectué lorsque le système de paiement Worker TSA sera connecté.');
+  alert('Votre demande de retrait a été enregistrée. Délai cible : 2 à 3 heures. Vous recevrez une notification lors du traitement puis lorsque le retrait sera marqué comme effectué.');
+  await WorkerTSA.loadOrganizerWithdrawalHistory();
   document.getElementById('withdraw-amount').value='';
 };
 
@@ -1374,6 +1440,7 @@ WorkerTSA.openAdminConsole = async function () {
   await WorkerTSA.loadAdminPaymentMethods();
   await WorkerTSA.loadAdminPaymentDirectories();
   await WorkerTSA.loadAdminFinance();
+  await WorkerTSA.loadAdminOrganizerWithdrawals();
 };
 
 WorkerTSA.approveEvent = async function (eventId) {
@@ -1596,19 +1663,92 @@ WorkerTSA.loadAdminFinance = async function(){
   } catch(error){console.error('Finance admin:',error);}
 };
 
+WorkerTSA.adminOrganizers = [];
+WorkerTSA.adminEvents = [];
+
 WorkerTSA.loadAdminPaymentDirectories = async function(){
   try {
     const providers=await db.collection('providers').get();
     const events=await db.collection('events').get();
     const ps=document.getElementById('admin-payout-organizer'), es=document.getElementById('admin-payout-event');
-    if(ps){ const unique={}; providers.docs.forEach(d=>{const x=d.data()||{}; if(x.accountRole==='organisateur') unique[d.id]=x;}); ps.innerHTML='<option value="">Choisir un organisateur</option>'+Object.keys(unique).map(uid=>'<option value="'+uid+'">'+escapeHtml(unique[uid].name||unique[uid].businessName||uid)+'</option>').join(''); }
-    if(es){ es.innerHTML='<option value="">Choisir un événement</option>'+events.docs.map(d=>{const x=d.data()||{};return '<option value="'+d.id+'" data-org="'+escapeHtml(x.organizerId||'')+'">'+escapeHtml(x.eventName||'Événement')+'</option>';}).join(''); }
-  } catch(error){console.error('Annuaire finance:',error);}
+    const unique={};
+    providers.docs.forEach(function(d){
+      const x=d.data()||{};
+      // Compatibilité avec les anciens profils : profileType peut être présent
+      // même si accountRole n'a pas encore été écrit.
+      if(x.accountRole==='organisateur' || x.profileType==='organisateur') unique[d.id]=Object.assign({uid:d.id},x);
+    });
+    WorkerTSA.adminOrganizers=Object.keys(unique).map(function(uid){ return unique[uid]; }).sort(function(a,b){
+      return String(a.name||a.businessName||a.professionalEmail||a.uid).localeCompare(String(b.name||b.businessName||b.professionalEmail||b.uid),'fr');
+    });
+    WorkerTSA.adminEvents=events.docs.map(function(d){ return Object.assign({id:d.id},d.data()||{}); });
+
+    if(ps){
+      ps.innerHTML='<option value="">Choisir un organisateur</option>'+WorkerTSA.adminOrganizers.map(function(x){
+        return '<option value="'+escapeHtml(x.uid)+'">'+escapeHtml(x.name||x.businessName||x.professionalEmail||x.uid)+'</option>';
+      }).join('');
+      ps.value='';
+    }
+    WorkerTSA.renderAdminOrganizerPicker();
+    WorkerTSA.filterAdminPayoutEvents('');
+  } catch(error){
+    console.error('Annuaire finance:',error);
+    const list=document.getElementById('admin-organizer-picker-list');
+    if(list) list.innerHTML='<div class="empty-state error-state">Impossible de charger la liste des organisateurs. Vérifiez les règles Firestore de la collection providers.</div>';
+  }
 };
 
+WorkerTSA.renderAdminOrganizerPicker = function(){
+  const list=document.getElementById('admin-organizer-picker-list');
+  if(!list) return;
+  if(!WorkerTSA.adminOrganizers.length){
+    list.innerHTML='<div class="empty-state">Aucun compte organisateur trouvé pour le moment.</div>';
+    return;
+  }
+  list.innerHTML=WorkerTSA.adminOrganizers.map(function(x){
+    const display=x.name||x.businessName||'Organisateur sans nom';
+    const contact=x.phone||x.whatsapp||x.professionalEmail||'Coordonnées non renseignées';
+    return '<button type="button" class="admin-organizer-item" onclick="WorkerTSA.selectAdminOrganizer(\'' + escapeHtml(x.uid) + '\')">' +
+      '<span class="admin-organizer-avatar">'+escapeHtml(String(display).charAt(0).toUpperCase())+'</span>'+
+      '<span class="admin-organizer-main"><strong>'+escapeHtml(display)+'</strong><small>ID : '+escapeHtml(x.uid)+'</small><small>'+escapeHtml(contact)+'</small></span>'+
+      '<span class="admin-organizer-arrow">›</span></button>';
+  }).join('');
+};
+
+WorkerTSA.openOrganizerPicker = function(){
+  WorkerTSA.renderAdminOrganizerPicker();
+  const overlay=document.getElementById('admin-organizer-picker');
+  if(overlay){ overlay.classList.add('visible'); overlay.setAttribute('aria-hidden','false'); }
+};
+WorkerTSA.closeOrganizerPicker = function(){
+  const overlay=document.getElementById('admin-organizer-picker');
+  if(overlay){ overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden','true'); }
+};
+WorkerTSA.selectAdminOrganizer = function(uid){
+  const organizer=WorkerTSA.adminOrganizers.find(function(x){return x.uid===uid;});
+  const select=document.getElementById('admin-payout-organizer');
+  if(!organizer || !select) return;
+  select.value=uid;
+  const trigger=document.getElementById('admin-payout-organizer-trigger');
+  if(trigger) trigger.textContent=(organizer.name||organizer.businessName||organizer.professionalEmail||uid)+' · '+uid;
+  const destination=document.getElementById('admin-payout-destination');
+  if(destination && !destination.value.trim()) destination.value=organizer.phone||organizer.whatsapp||'';
+  WorkerTSA.filterAdminPayoutEvents(uid);
+  WorkerTSA.closeOrganizerPicker();
+};
+
+WorkerTSA.filterAdminPayoutEvents = function(organizerId){
+  const es=document.getElementById('admin-payout-event');
+  if(!es) return;
+  const events=WorkerTSA.adminEvents.filter(function(x){return !organizerId || x.organizerId===organizerId;});
+  es.innerHTML='<option value="">Choisir un événement</option>'+events.map(function(x){
+    return '<option value="'+escapeHtml(x.id)+'">'+escapeHtml(x.eventName||'Événement')+'</option>';
+  }).join('');
+};
 
 WorkerTSA.openAdminOrganizerPayout = function(){
-  const el=document.getElementById('admin-payout-organizer'); if(el){el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus();}
+  const el=document.getElementById('admin-payout-organizer-trigger');
+  if(el){el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(function(){WorkerTSA.openOrganizerPicker();},180);}
 };
 WorkerTSA.openAdminWithdrawal = function(){
   const el=document.getElementById('admin-withdraw-amount'); if(el){el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus();}
@@ -1639,6 +1779,29 @@ WorkerTSA.createOrganizerPayout = async function(){
 
 WorkerTSA.markOrganizerPayoutPaid = async function(id){if(!(await WorkerTSA.requireAdmin()))return;if(!confirm('Confirmer que le transfert a réellement été effectué ?'))return;await db.collection('organizerPayouts').doc(id).update({status:'paid',processedAt:firebase.firestore.FieldValue.serverTimestamp(),processedBy:auth.currentUser.uid});await WorkerTSA.loadAdminFinance();};
 WorkerTSA.rejectOrganizerPayout = async function(id){if(!(await WorkerTSA.requireAdmin()))return;await db.collection('organizerPayouts').doc(id).update({status:'rejected',processedAt:firebase.firestore.FieldValue.serverTimestamp(),processedBy:auth.currentUser.uid});await WorkerTSA.loadAdminFinance();};
+
+WorkerTSA.loadAdminOrganizerWithdrawals = async function(){
+  if(!(await WorkerTSA.requireAdmin())) return;
+  const list=document.getElementById('admin-organizer-withdrawal-list'); if(!list) return;
+  list.innerHTML='<div class="empty-state">Chargement des demandes de retrait…</div>';
+  try {
+    const snap=await db.collection('withdrawals').get();
+    const rows=snap.docs.map(function(d){return {id:d.id,...d.data()};}).sort(function(a,b){
+      const ad=a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0, bd=b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0; return bd-ad;
+    });
+    list.innerHTML=rows.length?rows.map(function(w){
+      const status=w.status||'pending';
+      const actions = status === 'pending' ? `<button class="btn btn-outline" onclick="WorkerTSA.setOrganizerWithdrawalStatus('${w.id}','processing')">Prendre en charge</button><button class="btn btn-primary" onclick="WorkerTSA.setOrganizerWithdrawalStatus('${w.id}','paid')">Marquer effectué</button><button class="btn btn-outline" onclick="WorkerTSA.setOrganizerWithdrawalStatus('${w.id}','rejected')">Refuser</button>` : (status === 'processing' ? `<button class="btn btn-primary" onclick="WorkerTSA.setOrganizerWithdrawalStatus('${w.id}','paid')">Marquer effectué</button><button class="btn btn-outline" onclick="WorkerTSA.setOrganizerWithdrawalStatus('${w.id}','rejected')">Refuser</button>` : '');
+      return '<article class="dashboard-event-card"><div><span class="home-kicker">RETRAIT ORGANISATEUR</span><h3>'+escapeHtml(w.eventName||'Événement')+'</h3><p>Organisateur : '+escapeHtml(w.organizerId||'')+'</p><p>'+formatFCFA(w.amount||0)+' · '+escapeHtml(w.paymentMethod||'')+' · '+escapeHtml(w.payoutPhone||'')+'</p><small>Demandé : '+formatNotificationDate(w.createdAt)+' · cible 2–3 h</small></div><div><strong>'+escapeHtml(status)+'</strong><div class="admin-form-actions" style="margin-top:8px;">'+actions+'</div></div></article>';
+    }).join(''):'<div class="empty-state">Aucune demande de retrait organisateur.</div>';
+  } catch(error){ console.error(error); list.innerHTML='<div class="empty-state error-state">Impossible de charger les retraits organisateurs.</div>'; }
+};
+WorkerTSA.setOrganizerWithdrawalStatus = async function(id,status){
+  if(!(await WorkerTSA.requireAdmin())) return;
+  if(status==='paid' && !confirm('Confirmer que le transfert a réellement été effectué ?')) return;
+  await db.collection('withdrawals').doc(id).update({status:status,processedAt:firebase.firestore.FieldValue.serverTimestamp(),processedBy:auth.currentUser.uid});
+  await WorkerTSA.loadAdminOrganizerWithdrawals();
+};
 
 WorkerTSA.createAdminWithdrawal = async function(){
   if(!(await WorkerTSA.requireAdmin()))return;
@@ -1677,10 +1840,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const profile = await WorkerTSA.loadAccountProfile(user.uid);
     WorkerTSA.state.profileType = profile && profile.accountRole ? profile.accountRole : null;
     WorkerTSA.refreshHomeRoleUI();
+    if (WorkerTSA.state.profileType === 'organisateur') WorkerTSA.registerPushForCurrentUser().catch(function(){});
   });
   renderCategoryOptions('evenement'); // catégories par défaut pour l'écran org-11
   const withdrawEvent = document.getElementById('withdraw-event');
   if (withdrawEvent) withdrawEvent.addEventListener('change', WorkerTSA.updateWithdrawalAvailability);
+  const adminOrganizerSelect = document.getElementById('admin-payout-organizer');
+  if (adminOrganizerSelect) adminOrganizerSelect.addEventListener('change', function(){ WorkerTSA.filterAdminPayoutEvents(this.value); });
+  const adminOrganizerPicker = document.getElementById('admin-organizer-picker');
+  if (adminOrganizerPicker) adminOrganizerPicker.addEventListener('click', function(e){ if(e.target===adminOrganizerPicker) WorkerTSA.closeOrganizerPicker(); });
 
   // Écran de démarrage : image 9:16 affichée pendant 1 seconde,
   // puis création du PIN lors de la première utilisation ou

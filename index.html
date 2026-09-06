@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#FFFFFF" />
 <meta name="color-scheme" content="light" />
 <title>Worker TSA — par Trillion Software</title>
-<link rel="stylesheet" href="styles.css?v=16" />
+<link rel="stylesheet" href="styles.css?v=19" />
 <link rel="icon" href="icon.png" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -710,6 +710,11 @@
     <p class="error-text" id="withdraw-error"></p>
     <button class="btn btn-primary" id="btn-withdraw" disabled onclick="WorkerTSA.requestWithdrawal()">Demander le retrait</button>
   </div>
+  <div class="admin-form-actions" style="margin-top:18px;">
+    <button class="btn btn-outline" type="button" onclick="WorkerTSA.enablePushNotifications()">🔔 Activer les notifications sur ce téléphone</button>
+  </div>
+  <div class="dashboard-note"><strong>Retraits</strong><p>Après une demande de retrait validée, le délai cible Worker TSA est de <strong>2 à 3 heures</strong>. Vous recevrez une notification lorsque le retrait passe en traitement puis lorsqu’il est marqué comme effectué.</p></div>
+  <div id="organizer-withdrawal-history" class="dashboard-event-list"></div>
   <div class="dashboard-note"><strong>À retenir</strong><p>La commission Worker TSA est de 5 % sur chaque ticket vendu. Les ventes sont verrouillées automatiquement dès que l'heure exacte de l'événement est atteinte.</p></div>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
 </section>
@@ -763,7 +768,7 @@
   <h1 class="screen-title">Confirmer mon achat</h1>
   <p class="screen-desc">Dans cette version de test, le paiement est simulé. Après validation, Worker TSA génère immédiatement votre ticket unique et le rend disponible en PDF.</p>
   <div class="info-card payment-confirm-card"><div><span>Événement</span><strong id="payment-event-name">—</strong></div><div><span>Participant</span><strong id="payment-buyer-name">—</strong></div><div><span>Montant</span><strong id="payment-ticket-price">0 FCFA</strong></div><div><span>Tickets pour cet événement</span><strong id="payment-limit-count">0/5</strong></div></div>
-  <div class="notification-card"><div class="notification-channel">✉ CONFIRMATION SIMULÉE</div><h2>Après validation</h2><p>Vous recevrez une confirmation dans l'application et une notification e-mail simulée. Votre ticket sera disponible immédiatement dans « Mes tickets » et pourra être téléchargé en PDF.</p></div>
+  <div class="notification-card"><div class="notification-channel">🔔 NOTIFICATION</div><h2>Après validation</h2><p>Vous recevrez une confirmation dans l'application et une notification push si les notifications sont activées. Votre ticket sera disponible immédiatement dans « Mes tickets » et pourra être téléchargé en PDF.</p></div>
   <p class="error-text" id="ticket-payment-error"></p>
   <button class="btn btn-primary" id="btn-confirm-ticket-payment" onclick="WorkerTSA.validateTicketPayment()">Valider le paiement (simulation)</button>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-ticket-buy')">Retour</button>
@@ -849,7 +854,7 @@
      NOTIFICATIONS / E-MAILS SIMULÉS
      ============================================================ -->
 <section id="screen-notifications" class="screen screen-dashboard">
-  <div class="dashboard-head"><div><span class="home-kicker">CENTRE DE NOTIFICATIONS</span><h1 class="screen-title">Mes messages</h1><p class="screen-desc">Historique des confirmations simulées envoyées par Worker TSA.</p></div><button class="refresh-btn" onclick="WorkerTSA.openNotifications()">↻</button></div>
+  <div class="dashboard-head"><div><span class="home-kicker">CENTRE DE NOTIFICATIONS</span><h1 class="screen-title">Mes messages</h1><p class="screen-desc">Historique des notifications Worker TSA et des alertes push.</p></div><button class="refresh-btn" onclick="WorkerTSA.openNotifications()">↻</button></div>
   <div id="notification-list" class="notification-list"></div>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
 </section>
@@ -904,7 +909,8 @@
   <div class="admin-panel admin-finance-panel">
     <div class="panel-title-row"><div><h2>📤 Versement organisateur</h2><p>Créez un ordre de versement vers un organisateur.</p></div></div>
     <div class="admin-form">
-      <select id="admin-payout-organizer"><option value="">Choisir un organisateur</option></select>
+      <button class="admin-picker-trigger" id="admin-payout-organizer-trigger" type="button" onclick="WorkerTSA.openOrganizerPicker()">Choisir un organisateur</button>
+      <select id="admin-payout-organizer" class="admin-hidden-select" aria-hidden="true" tabindex="-1"><option value="">Choisir un organisateur</option></select>
       <select id="admin-payout-event"><option value="">Choisir un événement</option></select>
       <input type="number" id="admin-payout-amount" min="1" step="1" placeholder="Montant en FCFA" />
       <select id="admin-payout-method"><option value="">Choisir le moyen de paiement</option></select>
@@ -929,11 +935,22 @@
     <div id="admin-withdrawal-list" class="dashboard-event-list"></div>
   </div>
 
+  <div class="admin-panel admin-finance-panel">
+    <div class="panel-title-row"><div><h2>📥 Demandes de retrait des organisateurs</h2><p>Traitez les demandes et marquez-les comme en traitement, effectuées ou refusées.</p></div></div>
+    <div id="admin-organizer-withdrawal-list" class="dashboard-event-list"></div>
+  </div>
   <div class="admin-panel">
     <div class="panel-title-row"><div><h2>Assistance</h2><p>E-mail professionnel Worker TSA à renseigner dans <code>firebase-config.js</code>.</p></div></div>
     <p class="info-card"><strong id="admin-support-email">E-mail d’assistance non configuré</strong></p>
   </div>
   <button class="btn btn-outline" onclick="WorkerTSA.goTo('screen-home')">Retour à l'accueil</button>
+
+  <div id="admin-organizer-picker" class="admin-picker-overlay" aria-hidden="true">
+    <div class="admin-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-organizer-picker-title">
+      <div class="admin-picker-head"><div><span class="home-kicker">VERSEMENT</span><h2 id="admin-organizer-picker-title">Choisir un organisateur</h2><p>Sélectionnez automatiquement un organisateur inscrit dans Worker TSA.</p></div><button type="button" class="admin-picker-close" onclick="WorkerTSA.closeOrganizerPicker()" aria-label="Fermer">×</button></div>
+      <div id="admin-organizer-picker-list" class="admin-organizer-list"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ============================================================
@@ -974,7 +991,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=11"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="firebase-config.js?v=18"></script>
+<script src="firebase-messaging-config.js?v=18"></script>
 <script src="auth.js?v=11"></script>
 <script src="provider.js?v=11"></script>
 <script src="app.js?v=11"></script>

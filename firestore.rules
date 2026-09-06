@@ -86,14 +86,21 @@ service cloud.firestore {
     }
 
     match /withdrawals/{withdrawalId} {
-      allow read: if signedIn() && resource.data.organizerId == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.organizerId == request.auth.uid);
       allow create: if signedIn()
                     && get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.accountRole == 'organisateur'
                     && request.resource.data.organizerId == request.auth.uid
                     && request.resource.data.status == 'pending'
                     && request.resource.data.amount is number
                     && request.resource.data.amount > 0;
-      allow update, delete: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /notificationTokens/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // Configuration financière réservée à l'administrateur.
