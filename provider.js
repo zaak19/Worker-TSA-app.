@@ -172,8 +172,15 @@ WorkerTSA.getParticipantTickets = async function (uid) {
 WorkerTSA.getParticipantTicketCount = async function (uid, eventId) {
   if (!uid || !eventId) return 0;
   const ref = db.collection('ticketLimits').doc(uid + '_' + eventId);
-  const snap = await ref.get();
-  return snap.exists ? Number((snap.data() || {}).count || 0) : 0;
+  try {
+    const snap = await ref.get();
+    return snap.exists ? Number((snap.data() || {}).count || 0) : 0;
+  } catch (error) {
+    // Une ancienne règle Firestore ne doit pas bloquer l'écran d'achat.
+    // Le contrôle définitif reste effectué dans recordTicketSale().
+    console.warn('Compteur ticket indisponible :', error);
+    return 0;
+  }
 };
 
 WorkerTSA.recordTicketSale = async function (eventId, saleData) {

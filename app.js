@@ -1293,14 +1293,26 @@ WorkerTSA.openTicketPurchase = async function (eventId) {
     document.getElementById('buy-ticket-price').textContent = formatFCFA(event.price);
     document.getElementById('buy-first-name').value = profile.firstName || '';
     document.getElementById('buy-last-name').value = profile.lastName || '';
-    const count = await WorkerTSA.getParticipantTicketCount(WorkerTSA.state.currentUserId, eventId);
-    document.getElementById('buy-limit-count').textContent = count + '/5';
-    document.getElementById('btn-buy-ticket').disabled = count >= 5;
+    // Ouvrir immédiatement l'écran d'achat. La lecture du compteur est
+    // secondaire : une erreur de règle Firestore ne doit plus empêcher
+    // l'utilisateur de rentrer dans l'achat. La limite est ensuite
+    // contrôlée de façon atomique au moment de la validation.
+    document.getElementById('buy-limit-count').textContent = '—/5';
+    document.getElementById('btn-buy-ticket').disabled = false;
     if (errorEl) errorEl.classList.remove('visible');
     WorkerTSA.goTo('screen-ticket-buy');
+
+    try {
+      const count = await WorkerTSA.getParticipantTicketCount(WorkerTSA.state.currentUserId, eventId);
+      document.getElementById('buy-limit-count').textContent = count + '/5';
+      document.getElementById('btn-buy-ticket').disabled = count >= WorkerTSA.MAX_TICKETS_PER_EVENT;
+    } catch (countError) {
+      console.warn('Compteur de tickets indisponible à l’ouverture :', countError);
+      // L'écran reste accessible. La transaction d'achat fera le contrôle final.
+    }
   } catch (error) {
     console.error('Impossible d’ouvrir l’achat du ticket :', error);
-    showError(errorEl, 'Impossible d’ouvrir cet achat pour le moment. Vérifiez votre connexion puis réessayez.');
+    if (errorEl) showError(errorEl, 'Impossible d’ouvrir cet achat pour le moment. Vérifiez votre connexion puis réessayez.');
   }
 };
 

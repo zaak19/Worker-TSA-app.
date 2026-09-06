@@ -43,7 +43,7 @@ service cloud.firestore {
       // L'identifiant du compteur est construit côté application sous la forme
       // UID_EVENTID. On utilise uniquement cet identifiant pour la lecture afin
       // que le premier achat fonctionne même quand le document n'existe pas encore.
-      allow read: if signedIn() && limitId.matches('^' + request.auth.uid + '_.*$');
+      allow read: if signedIn() && limitId.matches('^' + request.auth.uid + '_.+$');
       allow create: if signedIn()
                     && request.resource.data.buyerId == request.auth.uid
                     && request.resource.data.count >= 1
