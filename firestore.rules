@@ -40,13 +40,10 @@ service cloud.firestore {
     }
 
     match /ticketLimits/{limitId} {
-      // Le document n'existe pas encore lors du premier achat :
-      // resource.data est alors absent, donc il faut autoriser la lecture
-      // en vérifiant l'identifiant acheteur encodé dans l'ID du document.
-      allow read: if signedIn() && (
-        resource.data.buyerId == request.auth.uid
-        || limitId.matches('^' + request.auth.uid + '_.*$')
-      );
+      // L'identifiant du compteur est construit côté application sous la forme
+      // UID_EVENTID. On utilise uniquement cet identifiant pour la lecture afin
+      // que le premier achat fonctionne même quand le document n'existe pas encore.
+      allow read: if signedIn() && limitId.matches('^' + request.auth.uid + '_.*$');
       allow create: if signedIn()
                     && request.resource.data.buyerId == request.auth.uid
                     && request.resource.data.count >= 1

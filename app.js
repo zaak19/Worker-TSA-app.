@@ -1282,7 +1282,9 @@ WorkerTSA.openTicketPurchase = async function (eventId) {
   try {
     WorkerTSA.state.selectedEvent = event;
     const profile = await WorkerTSA.loadAccountProfile(WorkerTSA.state.currentUserId);
-    if (!profile || !profile.firstName || !profile.lastName) { WorkerTSA.goTo('screen-part-profile'); return; }
+    // L'administrateur doit pouvoir tester le parcours d'achat sans être obligé
+    // de posséder un profil participant. Les champs Nom/Prénom restent
+    // modifiables sur l'écran d'achat.
     document.getElementById('buy-event-name').textContent = event.eventName || 'Événement';
     document.getElementById('buy-event-category').textContent = event.category || 'Événement';
     document.getElementById('buy-event-date').textContent = formatEventDate(event.date,event.time);
@@ -1332,7 +1334,11 @@ WorkerTSA.validateTicketPayment = async function () {
     const result = await WorkerTSA.recordTicketSale(purchase.event.id, { firstName: purchase.firstName, lastName: purchase.lastName, unitPrice: purchase.event.price });
     if (!result.success) throw result.error;
     WorkerTSA.state.selectedTicket = result.ticket;
-    await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { firstName:purchase.firstName, lastName:purchase.lastName });
+    // Ne pas bloquer un achat administrateur à cause du profil providers :
+    // l'admin peut acheter/tester un ticket sans profil participant.
+    if (!WorkerTSA.state.isAdmin) {
+      await WorkerTSA.saveProviderProfile(WorkerTSA.state.currentUserId, { firstName:purchase.firstName, lastName:purchase.lastName });
+    }
     try { await db.collection('adminAlerts').add({ type:'ticket_sale', eventId:purchase.event.id, eventName:purchase.event.eventName||'Événement', amount:Number(purchase.event.price)||0, commission:Math.round((Number(purchase.event.price)||0)*WorkerTSA.TICKET_COMMISSION_RATE), ticketCode:result.ticketCode, createdAt:firebase.firestore.FieldValue.serverTimestamp() }); } catch(alertError) { console.warn('Alerte admin non enregistrée :', alertError); }
     await WorkerTSA.createNotification(WorkerTSA.state.currentUserId, {
       type:'ticket_payment', channel:'email', subject:'Paiement de ticket confirmé',
